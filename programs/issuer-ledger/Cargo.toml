@@ -1,0 +1,29 @@
+[package]
+name = "issuer-ledger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "Ika dWallet-controlled RWA issuer ledger on Solana, written in Pinocchio"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+
+[dependencies]
+pinocchio = { workspace = true }
+pinocchio-system = { workspace = true }
+pinocchio-token-2022 = { workspace = true }
+solana-keccak-hasher = { workspace = true }
+
+[dev-dependencies]
+litesvm = { workspace = true }
+solana-account = { workspace = true }
+solana-address = { workspace = true }
+solana-instruction = { workspace = true }
+solana-keypair = { workspace = true }
+solana-signer = { workspace = true }
+solana-transaction = { workspace = true }
+solana-program-error = { workspace = true }
+solana-clock = { workspace = true }
+
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(target_os, values("solana"))'] }

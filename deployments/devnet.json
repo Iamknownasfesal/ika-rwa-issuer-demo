@@ -1,0 +1,65 @@
+{
+  "programId": "DkXkmLYeR63gxhvD4FkV2oAJjkKzUUGJhDoqA6ULdauE",
+  "ikaProgram": "87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY",
+  "rpcUrl": "https://api.devnet.solana.com",
+  "wsUrl": "wss://api.devnet.solana.com",
+  "grpcUrl": "pre-alpha-dev-1.ika.ika-network.net:443",
+  "createKey": "d1a700fa7e67c2117fcb0578858c834893d8d3edcc0da9fae01dd7500ab8ddbe",
+  "asset": "E4NBUCYWYQL8VCd4mASHw3StVd2fGxh2o5xLM6CzTb9x",
+  "mintAuthority": "Hhup4anfWmLBtK8y4jkxeQazywmGr4CQvmZ43TW62Ryx",
+  "cpiAuthority": "8TthbQqiWtacyE8EwhQVPFXDjzKuDL1KeHmELFviuSM1",
+  "executor": "HJ2do4R7vEZpYHTAHyoA5YHLuoBwPZysgckHSsUPvxFi",
+  "approvers": [
+    {
+      "name": "Alice",
+      "pubkey": "7tTP8BJzUTQxQdmL2pD4skBpqFbZ4bJyhiQT6XfTHTmc"
+    },
+    {
+      "name": "Bob",
+      "pubkey": "8A2DRojY6gh7pSwjHfZRm9yM9m7fCJTitprLbrXxu62e"
+    },
+    {
+      "name": "Carol",
+      "pubkey": "F9reGuXRoLubQdF1qrgcYkvH5hBgn9qBTsaiKrxA6hrg"
+    }
+  ],
+  "dwallets": {
+    "secp256k1": {
+      "pda": "EAAtkv81jxQBQqTQfunhLcixDFZ9KZqVLSKyZj1kB9Uo",
+      "publicKeyHex": "036b9b4167198fba816321a709b0a70807ad60020a49178bac8776582d59adb786",
+      "evmAddress": "0x8315319bc096b2e9368875516ebee3c9e56f99d0"
+    },
+    "curve25519": {
+      "pda": "DRFW3r7AqyAiotzgMVCodLXFW1N1yc2WBEp8rZi62WfB",
+      "publicKeyHex": "2f755ccccf1b0e1d74cc3fbe7ff2eaeb453ffb8a418ab957378fb333596ee17a",
+      "suiAddress": "0xf9d95e21ae904069277dc2d3648106fd89f83fe15c8cccd936a53d5a72ba5b7e"
+    }
+  },
+  "chains": {
+    "1": {
+      "pda": "H1MNtKy6zAGJY7m8Ptb85oDUMGprz3mYZx3upn4xj12q",
+      "contract": "F6811ztq7Gmy7wi3MGfuSafhqh3iQ6YMYHjjscCzr4tu",
+      "treasury": "9d3dXcYgKS1VGHMAq9MNAKoyba2mMjfSxP8N3oyawzzy"
+    },
+    "2": {
+      "pda": "9g4KaNLDwiUwfFjueo3JbNEkSBE7uLM4stAtFAhzWxRD",
+      "contract": "0x09538d6b32c1507a181a2720e8aae6f991039c1a",
+      "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
+    },
+    "3": {
+      "pda": "JBdrisTm5AAEs5zymReuE6ASxtQRtHCkQoWFTZFgJXLL",
+      "contract": "0x5806ba6619e4163650d8e8fa239aa9638b4931f1",
+      "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
+    },
+    "4": {
+      "pda": "4A9NpvPKoPKds4D3PFeqwY5G9yiYPZLe33xJyyDd7zQh",
+      "contract": "0xbe26e5b7f65895bae556f00b289fc89bf0eef06c9691a243ab451a713f2d3072",
+      "treasury": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10"
+    },
+    "5": {
+      "pda": "34ebWgGpqxj1WhGnx4Kf1yxXRGrmRDG5zCpbyvePMH3p",
+      "contract": "0x44c83da16951366a7105704f26984a0fa6814004",
+      "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
+    }
+  }
+}

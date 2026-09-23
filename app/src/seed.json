@@ -1,0 +1,93 @@
+{
+  "asset": {
+    "id": "tbill",
+    "name": "TBILL",
+    "decimals": 6,
+    "globalCap": 100000000
+  },
+  "chains": [
+    {
+      "chain": "solana",
+      "authorized": 30000000,
+      "cap": 50000000
+    },
+    {
+      "chain": "ethereum",
+      "authorized": 20000000,
+      "cap": 30000000
+    },
+    {
+      "chain": "base",
+      "authorized": 7500000,
+      "cap": 15000000
+    },
+    {
+      "chain": "sui",
+      "authorized": 5000000,
+      "cap": 15000000
+    },
+    {
+      "chain": "tempo",
+      "authorized": 3000000,
+      "cap": 10000000
+    }
+  ],
+  "threshold": 2,
+  "history": [
+    {
+      "type": "mint",
+      "chain": "solana",
+      "amount": 30000000,
+      "proposer": "alice",
+      "approvers": [
+        "bob",
+        "carol"
+      ],
+      "daysAgo": 21
+    },
+    {
+      "type": "mint",
+      "chain": "ethereum",
+      "amount": 20000000,
+      "proposer": "bob",
+      "approvers": [
+        "alice",
+        "carol"
+      ],
+      "daysAgo": 18
+    },
+    {
+      "type": "mint",
+      "chain": "base",
+      "amount": 7500000,
+      "proposer": "carol",
+      "approvers": [
+        "alice",
+        "bob"
+      ],
+      "daysAgo": 12
+    },
+    {
+      "type": "mint",
+      "chain": "sui",
+      "amount": 5000000,
+      "proposer": "alice",
+      "approvers": [
+        "bob",
+        "carol"
+      ],
+      "daysAgo": 9
+    },
+    {
+      "type": "mint",
+      "chain": "tempo",
+      "amount": 3000000,
+      "proposer": "bob",
+      "approvers": [
+        "alice",
+        "carol"
+      ],
+      "daysAgo": 5
+    }
+  ]
+}

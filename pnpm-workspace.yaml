@@ -1,0 +1,10 @@
+packages:
+  - sdk
+  - executor
+  - app
+
+# pnpm 12: dependencies allowed to run postinstall scripts.
+allowBuilds:
+  esbuild: true
+  protobufjs: true
+  unrs-resolver: true

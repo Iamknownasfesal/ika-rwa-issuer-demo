@@ -1,0 +1,42 @@
+{
+  "42431": {
+    "chainKey": "tempo-moderato",
+    "chainId": 42431,
+    "mintController": "0x44c83da16951366a7105704f26984a0fa6814004",
+    "dwalletSigner": "0x8315319bc096b2e9368875516ebee3c9e56f99d0",
+    "ledger": "0xc2049f0fe8c1bbf6e6e1a8aa3c8d6c6d383891162a23aba0c7e11fd90b56498f",
+    "domainSeparator": "0xa276bb7495a39dd74e5fc4e0e1f26b1e0e47f0102ef55161251853e981b20b81",
+    "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "deployer": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "explorer": "https://explore.testnet.tempo.xyz/address/0x44c83da16951366a7105704f26984a0fa6814004",
+    "txHash": "0xa1d7b1b1eb425ef93dbd5831fba3f9d7d290585bee491365e84e5322d3b372c0",
+    "rpcUrl": "https://rpc.moderato.tempo.xyz",
+    "feeToken": "0x20c0000000000000000000000000000000000000"
+  },
+  "84532": {
+    "chainKey": "base-sepolia",
+    "chainId": 84532,
+    "mintController": "0x5806ba6619e4163650d8e8fa239aa9638b4931f1",
+    "dwalletSigner": "0x8315319bc096b2e9368875516ebee3c9e56f99d0",
+    "ledger": "0xc2049f0fe8c1bbf6e6e1a8aa3c8d6c6d383891162a23aba0c7e11fd90b56498f",
+    "domainSeparator": "0x7b19be1f9c9db4bee39f2e39da3da4520c20be64319fa87f5445dd97b9125500",
+    "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "deployer": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "explorer": "https://sepolia.basescan.org/address/0x5806ba6619e4163650d8e8fa239aa9638b4931f1",
+    "txHash": "0x9ca8b2b5746941b6e1f77a03080e63b2a6f3bb22d069543760fd01bbd773b245",
+    "rpcUrl": "https://sepolia.base.org"
+  },
+  "11155111": {
+    "chainKey": "sepolia",
+    "chainId": 11155111,
+    "mintController": "0x09538d6b32c1507a181a2720e8aae6f991039c1a",
+    "dwalletSigner": "0x8315319bc096b2e9368875516ebee3c9e56f99d0",
+    "ledger": "0xc2049f0fe8c1bbf6e6e1a8aa3c8d6c6d383891162a23aba0c7e11fd90b56498f",
+    "domainSeparator": "0xabca17ffc69e32a7a4b1b88fb7a7bf0af9107c4e8797f09524c30fe3479d2e4d",
+    "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "deployer": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A",
+    "explorer": "https://sepolia.etherscan.io/address/0x09538d6b32c1507a181a2720e8aae6f991039c1a",
+    "txHash": "0x00b3ff7cc08615fd43ebf7785a13db9696d43452a98916116d01169d647d0c9e",
+    "rpcUrl": "https://ethereum-sepolia-rpc.publicnode.com"
+  }
+}

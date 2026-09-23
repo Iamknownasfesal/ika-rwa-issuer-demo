@@ -1,0 +1,167 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Console tokens: dense, neutral, one indigo accent. */
+:root {
+  --bg: #f4f4f5;
+  --surface: #ffffff;
+  --surface-2: #f7f7f8;
+  --hover: #f1f1f3;
+  --border: #e8e8ec;
+  --border-strong: #d9d9df;
+  --fg: #1b1b1f;
+  --fg-muted: #6b6b76;
+  --fg-faint: #9b9ba5;
+  --accent: #5e6ad2;
+  --accent-fg: #ffffff;
+  --accent-soft: #eef0fb;
+  --ok: #26a269;
+  --ok-soft: #e8f6ef;
+  --warn: #c98a00;
+  --warn-soft: #fbf3dc;
+  --bad: #d63c3c;
+  --bad-soft: #fbeaea;
+  --brand: #c1332b;
+  --mono: var(--font-geist-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+.dark {
+  /* Warm neutrals, the same ground as the landing page. */
+  --bg: #0f0f0e;
+  --surface: #151514;
+  --surface-2: #1a1a18;
+  --hover: #20201e;
+  --border: #262623;
+  --border-strong: #33332f;
+  --fg: #f1f0ea;
+  --fg-muted: #9a998f;
+  --fg-faint: #66655e;
+  --accent: #7c85e8;
+  --accent-fg: #0b0b0d;
+  --accent-soft: #1d1f33;
+  --ok: #4cc38a;
+  --ok-soft: #13271d;
+  --warn: #e0b243;
+  --warn-soft: #2c2412;
+  --bad: #ec6a64;
+  --bad-soft: #2e1616;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-hover: var(--hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
+  --color-fg: var(--fg);
+  --color-fg-muted: var(--fg-muted);
+  --color-fg-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-fg: var(--accent-fg);
+  --color-accent-soft: var(--accent-soft);
+  --color-ok: var(--ok);
+  --color-ok-soft: var(--ok-soft);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-bad: var(--bad);
+  --color-bad-soft: var(--bad-soft);
+  --color-brand: var(--brand);
+  --font-sans: var(--font-geist), system-ui, sans-serif;
+  --font-mono: var(--mono);
+  --font-display: var(--font-manrope), system-ui, sans-serif;
+  --font-serif: var(--font-serif), Georgia, serif;
+  --font-plex: var(--font-plex-mono), ui-monospace, monospace;
+}
+
+/* Landing palette: not inlined, so utilities read the variables and .site can swap them. */
+@theme {
+  --color-paper: #fafaf7;
+  --color-ink: #111110;
+  --color-rule: #d9d8d2;
+  --color-stone: #75746d;
+  --color-signal: #c1332b;
+}
+
+html {
+  color-scheme: light;
+}
+html.dark {
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  font-size: 13px;
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+}
+
+@layer components {
+  .mono {
+    font-family: var(--mono);
+  }
+  .btn {
+    @apply inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border bg-surface px-2.5 text-[13px] font-medium text-fg transition-colors hover:bg-hover disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .btn-primary {
+    @apply border-transparent bg-accent text-accent-fg hover:bg-accent/90 disabled:hover:bg-accent;
+  }
+  .input {
+    @apply h-8 w-full rounded-md border border-border bg-surface px-2.5 text-[13px] text-fg outline-none placeholder:text-fg-faint focus:border-accent;
+  }
+  select.input {
+    @apply appearance-none pr-7;
+  }
+  .kbd {
+    @apply inline-grid h-[18px] min-w-[18px] place-items-center rounded border border-border bg-surface-2 px-1 font-mono text-[10px] text-fg-muted;
+  }
+}
+
+/* Landing: dark. Swapping the palette variables inverts every paper/ink utility on the page. */
+.site {
+  --color-paper: #0f0f0e;
+  --color-ink: #f1f0ea;
+  --color-rule: #2a2a27;
+  --color-stone: #8f8e87;
+  --color-signal: #e5483d;
+  color-scheme: dark;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-display);
+  font-size: 16px;
+}
+.site ::selection {
+  background: var(--color-signal);
+  color: var(--color-paper);
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.rise {
+  animation: rise 0.9s cubic-bezier(0.2, 0.7, 0.1, 1) both;
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+html:has(.site),
+html:has(.site) body {
+  background: #0f0f0e;
+}

@@ -1,0 +1,9 @@
+[package]
+name = "tbill"
+edition = "2024"
+version = "0.1.0"
+
+# Sui system packages (Sui, MoveStdlib) are implicit dependencies in sui >= 1.45.
+
+[addresses]
+tbill = "0x0"

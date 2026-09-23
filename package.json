@@ -1,0 +1,35 @@
+{
+  "name": "ika-rwa-issuer-demo",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "build": "pnpm -r --filter ./sdk --filter ./executor build && node scripts/bundle-server.mjs",
+    "test": "pnpm -r --filter ./sdk --filter ./executor test",
+    "typecheck": "pnpm -r --filter ./sdk --filter ./executor typecheck && tsc -p scripts/tsconfig.json",
+    "lint": "pnpm -r --filter ./sdk --filter ./executor lint",
+    "setup:devnet": "tsx scripts/setup-devnet.ts",
+    "executor": "tsx executor/src/cli.ts",
+    "deploy:program": "bash scripts/deploy-program.sh",
+    "demo:intent": "tsx scripts/demo-intent.ts",
+    "deploy:evm": "tsx scripts/deploy-evm.ts",
+    "deploy:sui": "tsx scripts/deploy-sui.ts"
+  },
+  "devDependencies": {
+    "@ika-rwa/executor": "workspace:*",
+    "@ika-rwa/ledger-sdk": "workspace:*",
+    "@mysten/sui": "1.45.2",
+    "@noble/curves": "^2.0.1",
+    "@noble/hashes": "^2.4.0",
+    "@solana/kit": "^8.3.0",
+    "@types/node": "^24",
+    "bs58": "^6.0.0",
+    "esbuild": "0.28.2",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "viem": "^2.56.8"
+  }
+}

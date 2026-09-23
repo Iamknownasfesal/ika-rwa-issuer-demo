@@ -1,0 +1,41 @@
+{
+  "name": "@ika-rwa/ledger-sdk",
+  "version": "0.1.0",
+  "description": "TypeScript SDK for the Ika-controlled RWA issuer ledger program on Solana",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./ika": {
+      "types": "./dist/ika/index.d.ts",
+      "import": "./dist/ika/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && cp src/ika/ika_dwallet.proto dist/ika/",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@grpc/grpc-js": "^1.14.5",
+    "@grpc/proto-loader": "^0.8.1",
+    "@mysten/bcs": "^2.1.1",
+    "@noble/hashes": "^2.4.0",
+    "@solana/kit": "^8.3.0",
+    "bs58": "^6.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.6",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

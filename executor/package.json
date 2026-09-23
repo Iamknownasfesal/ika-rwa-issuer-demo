@@ -1,0 +1,39 @@
+{
+  "name": "@ika-rwa/executor",
+  "version": "0.1.0",
+  "description": "Off-chain executor: runs ledger legs end-to-end through Ika dWallet signing",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "src"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "run": "tsx src/cli.ts"
+  },
+  "dependencies": {
+    "@ika-rwa/ledger-sdk": "workspace:*",
+    "@mysten/sui": "1.45.2",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
+    "@solana/kit": "^8.3.0",
+    "bs58": "^6.0.0",
+    "viem": "^2.56.8"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "tsx": "^4.23.15",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.1"
+  }
+}

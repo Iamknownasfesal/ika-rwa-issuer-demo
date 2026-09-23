@@ -1,0 +1,14 @@
+target/
+node_modules/
+.next/
+dist/
+*.log
+.env
+.env.local
+keys/*.json
+!keys/README.md
+.DS_Store
+sdk/generated/
+recordings/
+.vercel
+contracts/sui/tbill/build/

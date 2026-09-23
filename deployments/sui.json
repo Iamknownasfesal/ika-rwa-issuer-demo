@@ -1,0 +1,16 @@
+{
+  "network": "testnet",
+  "rpcUrl": "https://sui-testnet-rpc.publicnode.com",
+  "packageId": "0xcbf50afc0af94dfaf8fb12786f9ea4228f88b233f5a405569d82d7883ed8dbed",
+  "controllerId": "0xbe26e5b7f65895bae556f00b289fc89bf0eef06c9691a243ab451a713f2d3072",
+  "adminCapId": "0x119d5903adbc2b618c1e79431ebf5813571edc41e1cbf158f0a1498997e92836",
+  "upgradeCapId": "0x067c75a3ab516c24f8c4e70451b9b903635e31f5d9ab35032c49cea490769a3b",
+  "coinType": "0xcbf50afc0af94dfaf8fb12786f9ea4228f88b233f5a405569d82d7883ed8dbed::tbill::TBILL",
+  "dwalletPubkeyHex": "2f755ccccf1b0e1d74cc3fbe7ff2eaeb453ffb8a418ab957378fb333596ee17a",
+  "ledger": "E4NBUCYWYQL8VCd4mASHw3StVd2fGxh2o5xLM6CzTb9x",
+  "domainSeparatorHex": "c0e7365e9663ae1e4179ece63837fc0eea38f1c0edf68da1e02bba2924d4fe95",
+  "treasury": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10",
+  "deployer": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10",
+  "txDigest": "DZJ5qM5jSRpsLvMK9xDJsQeQ8MSgHG2YGhSRuFR6AQKp",
+  "explorer": "https://suiscan.xyz/testnet/object/0xcbf50afc0af94dfaf8fb12786f9ea4228f88b233f5a405569d82d7883ed8dbed"
+}

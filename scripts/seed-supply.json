@@ -1,0 +1,8 @@
+{
+  "_note": "Starting supply per ledger chain id, in base units (6 decimals). setup-devnet records it on the ledger with add_chain; deploy-evm and deploy-sui mint the same amount to each chain's treasury at deployment, and setup mints Solana's into the Token-2022 treasury. The ledger and every chain therefore start equal.",
+  "1": { "name": "Solana", "authorized": "30000000000000", "cap": "50000000000000" },
+  "2": { "name": "Ethereum", "authorized": "20000000000000", "cap": "30000000000000" },
+  "3": { "name": "Base", "authorized": "7500000000000", "cap": "15000000000000" },
+  "4": { "name": "Sui", "authorized": "5000000000000", "cap": "15000000000000" },
+  "5": { "name": "Tempo", "authorized": "3000000000000", "cap": "10000000000000" }
+}
