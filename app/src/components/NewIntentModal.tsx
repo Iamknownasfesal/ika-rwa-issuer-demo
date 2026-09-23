@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { demoConfig } from "@/demoConfig";
-import { CHAINS, CHAIN_ORDER } from "@/lib/chains";
+import { CHAINS, CHAIN_ORDER, UNAVAILABLE_CHAINS } from "@/lib/chains";
 import { parseAmount, short } from "@/lib/format";
 import { allOk, evaluate } from "@/policy/policy";
 import { useLedgerStore } from "@/store/useLedgerStore";
@@ -43,6 +43,11 @@ function ChainPill({ label, value, onChange }: { label: string; value: ChainKey;
         {CHAIN_ORDER.map((k) => (
           <option key={k} value={k}>
             {CHAINS[k].name}
+          </option>
+        ))}
+        {UNAVAILABLE_CHAINS.map((u) => (
+          <option key={u.key} value={u.key} disabled>
+            {u.name} (unavailable)
           </option>
         ))}
       </select>

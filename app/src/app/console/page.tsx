@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/AppShell";
 import { ChainLogo } from "@/components/ChainLogo";
 import { CHAIN_COLOR, SupplyBar } from "@/components/SupplyBar";
 import { Hash, Section } from "@/components/ui";
-import { CHAINS, CHAIN_ORDER } from "@/lib/chains";
+import { CHAINS, CHAIN_ORDER, UNAVAILABLE_CHAINS } from "@/lib/chains";
 import { fmtAmount, pct } from "@/lib/format";
 import { useLedgerStore } from "@/store/useLedgerStore";
 
@@ -47,6 +47,16 @@ export default function LedgerPage() {
                   </div>
                 </li>
               ))}
+              {UNAVAILABLE_CHAINS.map((u) => (
+                <li key={u.key} className="flex items-center gap-2 px-4 py-3 text-fg-faint">
+                  <span className="opacity-60">
+                    <ChainLogo chain={u.key} size={16} />
+                  </span>
+                  <span className="font-medium">{u.name}</span>
+                  <span>{u.network}</span>
+                  <span className="ml-auto text-[12px]">Unavailable</span>
+                </li>
+              ))}
             </ul>
             <div className="overflow-x-auto rounded-lg border border-border max-md:hidden">
               <div className="grid min-w-[720px] grid-cols-[170px_110px_1fr_220px] items-center gap-4 border-b border-border bg-surface-2 px-4 py-2 text-[12px] text-fg-faint">
@@ -74,6 +84,19 @@ export default function LedgerPage() {
                       {fmtAmount(c.authorized)} <span className="text-fg-faint">/ {fmtAmount(c.cap, { compact: true })}</span>
                     </span>
                   </span>
+                </div>
+              ))}
+              {UNAVAILABLE_CHAINS.map((u) => (
+                <div key={u.key} className="grid min-w-[720px] grid-cols-[170px_110px_1fr_220px] items-center gap-4 px-4 py-2.5 text-fg-faint">
+                  <span className="flex items-center gap-2 font-medium">
+                    <span className="opacity-60">
+                      <ChainLogo chain={u.key} size={16} />
+                    </span>
+                    {u.name}
+                  </span>
+                  <span>{u.network}</span>
+                  <span className="text-[12px]">Unavailable</span>
+                  <span className="text-right text-[12px]">Unavailable</span>
                 </div>
               ))}
             </div>

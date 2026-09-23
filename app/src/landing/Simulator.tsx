@@ -2,7 +2,7 @@
 
 import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown } from "lucide-react";
-import { CHAINS, CHAIN_ORDER } from "@/lib/chains";
+import { CHAINS, CHAIN_ORDER, UNAVAILABLE_CHAINS } from "@/lib/chains";
 import { fmtAmount, parseAmount } from "@/lib/format";
 import { allOk, evaluate } from "@/policy/policy";
 import { buildSeed } from "@/seed";
@@ -51,6 +51,11 @@ export function Simulator() {
                 {CHAIN_ORDER.map((k) => (
                   <option key={k} value={k}>
                     {CHAINS[k].name}
+                  </option>
+                ))}
+                {UNAVAILABLE_CHAINS.map((u) => (
+                  <option key={u.key} value={u.key} disabled>
+                    {u.name} (unavailable)
                   </option>
                 ))}
               </select>

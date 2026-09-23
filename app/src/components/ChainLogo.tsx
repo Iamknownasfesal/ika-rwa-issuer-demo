@@ -1,14 +1,16 @@
+import type { UnavailableChainKey } from "@/lib/chains";
 import type { ChainKey } from "@/types";
 
-const STYLE: Record<ChainKey, { bg: string; fg: string; glyph: string }> = {
+const STYLE: Record<ChainKey | UnavailableChainKey, { bg: string; fg: string; glyph: string }> = {
   solana: { bg: "#111", fg: "#14f195", glyph: "S" },
   ethereum: { bg: "#627eea", fg: "#fff", glyph: "Ξ" },
   base: { bg: "#0052ff", fg: "#fff", glyph: "B" },
   sui: { bg: "#4da2ff", fg: "#fff", glyph: "◇" },
   tempo: { bg: "#1b1b1f", fg: "#f5c518", glyph: "T" },
+  canton: { bg: "#2b2b30", fg: "#ececf0", glyph: "C" },
 };
 
-export function ChainLogo({ chain, size = 24 }: { chain: ChainKey; size?: number }) {
+export function ChainLogo({ chain, size = 24 }: { chain: ChainKey | UnavailableChainKey; size?: number }) {
   const s = STYLE[chain];
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className="shrink-0 rounded-full">

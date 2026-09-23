@@ -4,7 +4,7 @@ import type { ReactNode } from "react";
 import { PageHeader } from "@/components/AppShell";
 import { ChainLogo } from "@/components/ChainLogo";
 import { Avatar, Hash } from "@/components/ui";
-import { CHAINS, CHAIN_ORDER } from "@/lib/chains";
+import { CHAINS, CHAIN_ORDER, UNAVAILABLE_CHAINS } from "@/lib/chains";
 import { fmtAmount } from "@/lib/format";
 import { useLedgerStore } from "@/store/useLedgerStore";
 
@@ -125,6 +125,21 @@ export default function SetupPage() {
               {c.allowlist[k].map((e) => (
                 <Hash key={e.address} value={e.address} />
               ))}
+            </Row>
+          ))}
+          {UNAVAILABLE_CHAINS.map((u) => (
+            <Row
+              key={u.key}
+              label={
+                <span className="inline-flex items-center gap-2 text-fg-faint">
+                  <span className="opacity-60">
+                    <ChainLogo chain={u.key} size={14} />
+                  </span>{" "}
+                  {u.name}
+                </span>
+              }
+            >
+              <span className="text-fg-faint">Unavailable</span>
             </Row>
           ))}
         </Group>

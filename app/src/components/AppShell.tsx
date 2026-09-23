@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useCallback, useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { ArrowUpRight, KeyRound, Layers, ListTodo, Menu, Moon, RotateCcw, Settings, SquarePen, Sun, X } from "lucide-react";
 import { demoConfig } from "@/demoConfig";
-import { CHAINS, CHAIN_ORDER } from "@/lib/chains";
+import { CHAINS, CHAIN_ORDER, UNAVAILABLE_CHAINS } from "@/lib/chains";
 import { fmtAmount } from "@/lib/format";
 import { useLedgerStore } from "@/store/useLedgerStore";
 import { ChainLogo } from "./ChainLogo";
@@ -157,6 +157,15 @@ function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
             </li>
           );
         })}
+        {UNAVAILABLE_CHAINS.map((u) => (
+          <li key={u.key} className="flex h-7 items-center gap-2 rounded-md px-2 text-fg-faint">
+            <span className="opacity-60">
+              <ChainLogo chain={u.key} size={14} />
+            </span>
+            <span className="flex-1">{u.name}</span>
+            <span className="text-[11px]">Unavailable</span>
+          </li>
+        ))}
       </ul>
 
       <div className="mt-auto space-y-3">

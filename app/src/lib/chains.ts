@@ -63,6 +63,10 @@ export const CHAINS: Record<ChainKey, ChainMeta> = {
 
 export const CHAIN_ORDER: ChainKey[] = ["solana", "ethereum", "base", "sui", "tempo"];
 
+/** Listed alongside the live chains; intents cannot target these yet. */
+export const UNAVAILABLE_CHAINS = [{ key: "canton", name: "Canton", network: "Canton Network" }] as const;
+export type UnavailableChainKey = (typeof UNAVAILABLE_CHAINS)[number]["key"];
+
 export function chainById(id: number): ChainMeta | undefined {
   return CHAIN_ORDER.map((k) => CHAINS[k]).find((c) => c.id === id);
 }
