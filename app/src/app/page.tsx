@@ -1,5 +1,8 @@
 import Link from "next/link";
+import { ChainLogo } from "@/components/ChainLogo";
 import { demoConfig } from "@/demoConfig";
+import type { UnavailableChainKey } from "@/lib/chains";
+import type { ChainKey } from "@/types";
 import type { ReactNode } from "react";
 import { LightBand } from "@/landing/LightBand";
 import { Hero, Wordmark } from "@/landing/Hero";
@@ -38,13 +41,13 @@ const STEPS = [
   },
 ];
 
-const CHAINS_LIST = [
-  { name: "Solana", how: "The ledger program itself holds the mint authority." },
-  { name: "Ethereum", how: "MintController verifies an EIP-712 authorization from the secp256k1 dWallet." },
-  { name: "Base", how: "Same controller, same dWallet, its own domain separator." },
-  { name: "Sui", how: "A Move package verifies an Ed25519 signature over the raw authorization." },
-  { name: "Tempo", how: "MintController on Tempo. The relayer pays fees in stablecoin." },
-  { name: "Canton", how: "Unavailable.", unavailable: true },
+const CHAINS_LIST: { key: ChainKey | UnavailableChainKey; name: string; how: string; unavailable?: boolean }[] = [
+  { key: "solana", name: "Solana", how: "The ledger program itself holds the mint authority." },
+  { key: "ethereum", name: "Ethereum", how: "MintController verifies an EIP-712 authorization from the secp256k1 dWallet." },
+  { key: "base", name: "Base", how: "Same controller, same dWallet, its own domain separator." },
+  { key: "sui", name: "Sui", how: "A Move package verifies an Ed25519 signature over the raw authorization." },
+  { key: "tempo", name: "Tempo", how: "MintController on Tempo. The relayer pays fees in stablecoin." },
+  { key: "canton", name: "Canton", how: "Unavailable.", unavailable: true },
 ];
 
 const FAQ = [
@@ -160,9 +163,12 @@ export default function Home() {
           <ul className="mt-16 border-t border-rule">
             {CHAINS_LIST.map((c, i) => (
               <Reveal key={c.name} delay={i * 60}>
-                <li className={`grid items-baseline gap-2 border-b border-rule py-7 md:grid-cols-[80px_1fr_1.4fr] md:gap-8 ${"unavailable" in c ? "opacity-45" : ""}`}>
+                <li className={`grid items-baseline gap-2 border-b border-rule py-7 md:grid-cols-[80px_1fr_1.4fr] md:gap-8 ${c.unavailable ? "opacity-45" : ""}`}>
                   <span className="font-plex text-[12px] text-signal">0{i + 1}</span>
-                  <span className="text-[clamp(28px,3vw,40px)] font-medium tracking-[-0.045em]">{c.name}</span>
+                  <span className="flex items-center gap-4 text-[clamp(28px,3vw,40px)] font-medium tracking-[-0.045em]">
+                    <ChainLogo chain={c.key} size={34} />
+                    {c.name}
+                  </span>
                   <span className="text-[15px] leading-relaxed text-stone">{c.how}</span>
                 </li>
               </Reveal>

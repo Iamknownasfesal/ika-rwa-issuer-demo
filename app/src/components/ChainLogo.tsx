@@ -1,23 +1,10 @@
 import type { UnavailableChainKey } from "@/lib/chains";
 import type { ChainKey } from "@/types";
 
-const STYLE: Record<ChainKey | UnavailableChainKey, { bg: string; fg: string; glyph: string }> = {
-  solana: { bg: "#111", fg: "#14f195", glyph: "S" },
-  ethereum: { bg: "#627eea", fg: "#fff", glyph: "Ξ" },
-  base: { bg: "#0052ff", fg: "#fff", glyph: "B" },
-  sui: { bg: "#4da2ff", fg: "#fff", glyph: "◇" },
-  tempo: { bg: "#1b1b1f", fg: "#f5c518", glyph: "T" },
-  canton: { bg: "#2b2b30", fg: "#ececf0", glyph: "C" },
-};
-
+/** Network logo as a round badge. Files live in public/chains. */
 export function ChainLogo({ chain, size = 24 }: { chain: ChainKey | UnavailableChainKey; size?: number }) {
-  const s = STYLE[chain];
   return (
-    <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden className="shrink-0 rounded-full">
-      <circle cx="12" cy="12" r="11.5" fill={s.bg} stroke="var(--border-strong)" strokeWidth="1" />
-      <text x="12" y="16" textAnchor="middle" fontSize="12" fontWeight="700" fill={s.fg} fontFamily="ui-sans-serif, system-ui">
-        {s.glyph}
-      </text>
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element -- tiny static SVGs; next/image adds nothing here
+    <img src={`/chains/${chain}.svg`} width={size} height={size} alt="" aria-hidden className="shrink-0 rounded-full ring-1 ring-border-strong" />
   );
 }
