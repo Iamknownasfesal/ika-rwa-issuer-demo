@@ -2,7 +2,7 @@
 
 The console runs on Vercel as project `ika-issuer-ledger` (https://ika-issuer-ledger.vercel.app),
 in devnet mode with live delivery, behind a shared password. Everything it touches is a testnet:
-Solana devnet, the Ika devnet pre-alpha, Sepolia, Base Sepolia, Sui testnet and Tempo Moderato.
+Solana devnet, the Ika devnet pre-alpha, Sepolia, Base Sepolia, Sui testnet and Arc testnet.
 
 ## What is gated
 

@@ -7,7 +7,7 @@ gas, and nothing can be minted or burned that the Solana ledger did not approve.
 
 | chain family | signer | encoding | contract |
 |---|---|---|---|
-| EVM (Ethereum Sepolia, Base Sepolia, Tempo Moderato) | secp256k1 dWallet | EIP-712 `IssuerAuthorization(uint8 action,uint256 amount,bytes32 account,uint256 nonce,bytes32 ledger)` | `evm/src/MintController.sol` |
+| EVM (Ethereum Sepolia, Base Sepolia, Arc testnet) | secp256k1 dWallet | EIP-712 `IssuerAuthorization(uint8 action,uint256 amount,bytes32 account,uint256 nonce,bytes32 ledger)` | `evm/src/MintController.sol` |
 | Sui testnet | Ed25519 dWallet | raw 161-byte message (`IKA_RWA_AUTH_V1 …`) | `sui/` |
 
 ## EVM: `MintController` (Foundry)
@@ -35,13 +35,13 @@ forge test -vv            # includes the byte-for-byte check against sdk/test/ve
 Deploy to the three testnets and record addresses in `deployments/evm.json`:
 
 ```bash
-pnpm deploy:evm                       # sepolia, base-sepolia, tempo-moderato (skips unfunded chains)
-pnpm deploy:evm --only tempo-moderato # Tempo funds itself from the public faucet (tempo_fundAddress)
+pnpm deploy:evm                       # sepolia, base-sepolia, arc-testnet (skips unfunded chains)
+pnpm deploy:evm --only arc-testnet    # one chain only
 ```
 
 Fund the printed deployer address with Sepolia ETH / Base Sepolia ETH first (faucet links are printed).
-Tempo has no native gas token: fees are paid in pathUSD via the 0x76 transaction type, which viem's
-Tempo client (`viem/tempo`) serializes; the faucet sends 1M of each test stablecoin.
+Arc's native gas token is USDC, so the deployer needs testnet USDC there, from https://faucet.circle.com
+(network Arc Testnet). Transactions are otherwise ordinary EVM transactions.
 
 The Foundry equivalent: `DWALLET_SIGNER=0x… LEDGER=0x… forge script script/Deploy.s.sol --rpc-url sepolia --broadcast --private-key $EVM_DEPLOYER_KEY`.
 

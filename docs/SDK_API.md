@@ -20,8 +20,8 @@ TypeScript 5, ESM, `"type": "module"`. Solana client: **`@solana/kit` v8** (not 
 ## Chain ids and metadata (`sdk/src/chains.ts`)
 
 ```ts
-export const ChainId = { Solana: 1, Ethereum: 2, Base: 3, Sui: 4, Tempo: 5 } as const;
-export type ChainKey = 'solana'|'ethereum'|'base'|'sui'|'tempo';
+export const ChainId = { Solana: 1, Ethereum: 2, Base: 3, Sui: 4, Arc: 5 } as const;
+export type ChainKey = 'solana'|'ethereum'|'base'|'sui'|'arc';
 export interface ChainMeta {
   id: number; key: ChainKey; name: string;
   legKind: 0|1;            // 0 SolanaNative, 1 IkaForeign
@@ -29,13 +29,13 @@ export interface ChainMeta {
   curve: 0|2;              // Ika DWalletCurve: 0 Secp256k1, 2 Curve25519
   signatureScheme: 0|5;    // Ika DWalletSignatureScheme: 0 EcdsaKeccak256, 5 EddsaSha512
   addressBytes: 20|32;
-  testnet: string;         // 'devnet' | 'sepolia' | 'base-sepolia' | 'sui-testnet' | 'tempo-moderato'
+  testnet: string;         // 'devnet' | 'sepolia' | 'base-sepolia' | 'sui-testnet' | 'arc-testnet'
   explorerTx: (hash: string) => string;
   explorerAddress: (addr: string) => string;
 }
 export const CHAINS: Record<number, ChainMeta>;
 ```
-Solana=1 (native, Ed25519 n/a), Ethereum=2/Base=3/Tempo=5 (secp256k1, EIP-712), Sui=4 (Curve25519, Raw).
+Solana=1 (native, Ed25519 n/a), Ethereum=2/Base=3/Arc=5 (secp256k1, EIP-712), Sui=4 (Curve25519, Raw).
 
 ## Types (`sdk/src/types.ts`): decoded accounts
 

@@ -8,7 +8,7 @@ export const CHAIN_COLOR: Record<string, string> = {
   ethereum: "#6272e8",
   base: "#1f5eff",
   sui: "#56a6f5",
-  tempo: "#e0a526",
+  arc: "#e0a526",
 };
 
 function Figure({ label, value, sub }: { label: string; value: string; sub?: string }) {

@@ -9,8 +9,8 @@
  *                     zero-trust dWallets (secp256k1 for EVM chains, curve25519 for Sui) through the SDK
  * 3. Token-2022       TBILL mint (authority = mint_authority PDA) + PDA-owned treasury account
  * 4. init_asset       TBILL, cap 100M, 2-of-3 approvers, 5 s timelock, the issuer's Ika request key
- * 4b. contracts       MintController on Sepolia / Base Sepolia / Tempo Moderato, Move package on Sui testnet
- * 5. add_chain × 5    Solana, Ethereum, Base, Sui, Tempo with the seed supply
+ * 4b. contracts       MintController on Sepolia / Base Sepolia / Arc testnet, Move package on Sui testnet
+ * 5. add_chain × 5    Solana, Ethereum, Base, Sui, Arc with the seed supply
  * 5b. hand-over       each dWallet's owner becomes the ledger's CPI authority, after its rules exist
  * 6. deployments/devnet.json
  *
@@ -317,7 +317,7 @@ async function main(): Promise<void> {
     // changed (an Ika wipe, a new root seed), the old asset cannot sign any more: start a new one.
     const same = previous.asset !== undefined && !flag('fresh') && previous.ikaProgram === IKA_PROGRAM && previous.ikaSigningKey === toHex(ikaSigningKey)
       && previous.dwallets?.secp256k1?.pda === dwallets.secp256k1.pda && previous.dwallets?.curve25519?.pda === dwallets.curve25519.pda;
-    if (!same && previous.asset) ok(`the Ika network, signing key or dWallets changed since ${previous.asset}: creating a new asset`);
+    if (!same && previous.asset) ok(flag('fresh') ? `--fresh: creating a new asset in place of ${previous.asset}` : `the Ika network, signing key or dWallets changed since ${previous.asset}: creating a new asset`);
     const resume: Partial<Deployment> = same ? previous : {};
     await setupAsset({ client, ikaClient, issuer, programId, admin, executor, approvers, approverNames, cpiAuthority, dwallets, secrets, ikaSigningKey, resume });
   } finally {

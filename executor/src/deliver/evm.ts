@@ -10,8 +10,7 @@
 import { chainById, toHex, type Authorization } from '@ika-rwa/ledger-sdk';
 import { createPublicClient, createWalletClient, http, type Address, type Hex, type PublicClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { sepolia, baseSepolia, tempoModerato } from 'viem/chains';
-import { createClient as createTempoClient, Addresses as TempoAddresses } from 'viem/tempo';
+import { sepolia, baseSepolia, arcTestnet } from 'viem/chains';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { repoRoot } from '../config.js';
@@ -70,7 +69,6 @@ export interface EvmDeployment {
   explorer: string;
   txHash: Hex;
   rpcUrl: string;
-  feeToken?: Address;
 }
 export type EvmDeployments = Record<string, EvmDeployment>;
 
@@ -89,10 +87,10 @@ export function loadRelayerKey(): Hex {
   return (JSON.parse(readFileSync(path, 'utf8')) as { privateKey: Hex }).privateKey;
 }
 
-const VIEM_CHAINS = { 11155111: sepolia, 84532: baseSepolia, 42431: tempoModerato } as const;
+const VIEM_CHAINS = { 11155111: sepolia, 84532: baseSepolia, 5042002: arcTestnet } as const;
 
 export interface DeliverEvmParams {
-  /** Ledger chain id (2 Ethereum, 3 Base, 5 Tempo). */
+  /** Ledger chain id (2 Ethereum, 3 Base, 5 Arc). */
   chainId: number;
   auth: Authorization;
   /** Full EIP-712 message bytes (unused on-chain; kept for logging / audit). */
@@ -136,15 +134,9 @@ export async function deliverEvm(p: DeliverEvmParams): Promise<Delivery> {
     };
   }
 
-  let hash: Hex;
-  if (meta.evmChainId === 42431) {
-    // Tempo: stablecoin-denominated fees via the 0x76 transaction type; viem's Tempo client serializes it.
-    const tempo = createTempoClient({ account, chain: tempoModerato, transport, feeToken: dep.feeToken ?? TempoAddresses.pathUsd });
-    hash = await tempo.writeContract({ address: dep.mintController, abi: MINT_CONTROLLER_ABI, functionName, args: [authArg, sig] });
-  } else {
-    const wallet = createWalletClient({ account, chain, transport });
-    hash = await wallet.writeContract({ address: dep.mintController, abi: MINT_CONTROLLER_ABI, functionName, args: [authArg, sig] });
-  }
+  // Arc pays gas in USDC as its native token, so it is an ordinary EVM transaction like the others.
+  const wallet = createWalletClient({ account, chain, transport });
+  const hash: Hex = await wallet.writeContract({ address: dep.mintController, abi: MINT_CONTROLLER_ABI, functionName, args: [authArg, sig] });
   const receipt = await publicClient.waitForTransactionReceipt({ hash, timeout: 180_000 });
   if (receipt.status !== 'success') throw new Error(`${meta.name} tx ${hash} reverted`);
   return {

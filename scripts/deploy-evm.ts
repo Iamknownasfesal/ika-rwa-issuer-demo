@@ -1,10 +1,10 @@
 /**
  * Deploy `MintController` (contracts/evm) to the EVM testnets and record the addresses.
  *
- *   pnpm deploy:evm [--only sepolia,base-sepolia,tempo-moderato] [--force]
+ *   pnpm deploy:evm [--only sepolia,base-sepolia,arc-testnet] [--force]
  *
  * Env (see .env.example): EVM_DEPLOYER_KEY (0x-prefixed private key; generated into keys/evm-deployer.json
- * when unset), SEPOLIA_RPC_URL, BASE_SEPOLIA_RPC_URL, TEMPO_RPC_URL.
+ * when unset), SEPOLIA_RPC_URL, BASE_SEPOLIA_RPC_URL, ARC_RPC_URL.
  *
  * Reads `dwalletSigner` (the secp256k1 dWallet's EVM address) and `ledger` (the Solana Asset PDA) from
  * deployments/devnet.json, so the controller is bound to exactly this ledger and signer. Writes
@@ -12,8 +12,7 @@
  */
 import { createPublicClient, createWalletClient, http, type Hex, type Address, formatEther, parseAbi } from 'viem';
 import { privateKeyToAccount, generatePrivateKey } from 'viem/accounts';
-import { sepolia, baseSepolia, tempoModerato } from 'viem/chains';
-import { createClient as createTempoClient, Addresses as TempoAddresses } from 'viem/tempo';
+import { sepolia, baseSepolia, arcTestnet } from 'viem/chains';
 import { execSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
@@ -24,8 +23,8 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const EVM_DIR = resolve(ROOT, 'contracts/evm');
 const OUT = resolve(ROOT, 'deployments/evm.json');
 const SEED = JSON.parse(readFileSync(resolve(ROOT, 'scripts/seed-supply.json'), 'utf8')) as Record<string, { authorized: string }>;
-/** Ledger chain ids: Ethereum 2, Base 3, Tempo 5. */
-const LEDGER_CHAIN: Record<string, string> = { sepolia: '2', 'base-sepolia': '3', 'tempo-moderato': '5' };
+/** Ledger chain ids: Ethereum 2, Base 3, Arc 5. */
+const LEDGER_CHAIN: Record<string, string> = { sepolia: '2', 'base-sepolia': '3', 'arc-testnet': '5' };
 const genesisFor = (key: string): bigint => BigInt(SEED[LEDGER_CHAIN[key]]?.authorized ?? '0');
 const args = process.argv.slice(2);
 const arg = (n: string) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : undefined; };
@@ -35,14 +34,15 @@ const ok = (m: string) => console.log(`  \x1b[32m✓\x1b[0m ${m}`);
 const warn = (m: string) => console.log(`  \x1b[33m!\x1b[0m ${m}`);
 const log = (m: string) => console.log(`\x1b[36m${m}\x1b[0m`);
 
-interface Target { key: string; chain: typeof sepolia; rpc: string; faucets: string[]; tempo?: boolean }
+interface Target { key: string; chain: typeof sepolia; rpc: string; faucets: string[] }
 const TARGETS: Target[] = [
   { key: 'sepolia', chain: sepolia, rpc: process.env.SEPOLIA_RPC_URL ?? 'https://ethereum-sepolia-rpc.publicnode.com',
     faucets: ['https://cloud.google.com/application/web3/faucet/ethereum/sepolia', 'https://www.alchemy.com/faucets/ethereum-sepolia', 'https://sepoliafaucet.com'] },
   { key: 'base-sepolia', chain: baseSepolia as unknown as typeof sepolia, rpc: process.env.BASE_SEPOLIA_RPC_URL ?? 'https://sepolia.base.org',
     faucets: ['https://www.alchemy.com/faucets/base-sepolia', 'https://faucet.quicknode.com/base/sepolia', 'https://docs.base.org/base-chain/tools/network-faucets'] },
-  { key: 'tempo-moderato', chain: tempoModerato as unknown as typeof sepolia, rpc: process.env.TEMPO_RPC_URL ?? 'https://rpc.moderato.tempo.xyz',
-    faucets: ['cast rpc tempo_fundAddress <ADDRESS> --rpc-url https://rpc.moderato.tempo.xyz'], tempo: true },
+  // Arc's native gas token is USDC: the faucet sends testnet USDC, and that pays for the deploy.
+  { key: 'arc-testnet', chain: arcTestnet as unknown as typeof sepolia, rpc: process.env.ARC_RPC_URL ?? 'https://rpc.testnet.arc.network',
+    faucets: ['https://faucet.circle.com (network: Arc Testnet, token: USDC)'] },
 ];
 
 export interface EvmDeploymentRecord {
@@ -57,7 +57,6 @@ export interface EvmDeploymentRecord {
   explorer: string;
   txHash: Hex;
   rpcUrl: string;
-  feeToken?: Address;
 }
 
 function loadDeployerKey(): Hex {
@@ -106,34 +105,16 @@ async function main() {
     }
     try {
       const publicClient = createPublicClient({ chain: t.chain, transport: http(t.rpc) });
-      let hash: Hex;
-      let feeToken: Address | undefined;
-      if (t.tempo) {
-        // Tempo has no native gas token: fees are paid in a stablecoin (pathUSD) with the 0x76 tx type,
-        // which viem's Tempo client serializes for us. The public faucet funds any address.
-        feeToken = TempoAddresses.pathUsd;
-        const tempo = createTempoClient({ account, chain: tempoModerato, transport: http(t.rpc), feeToken });
-        // Fund from the public faucet (idempotent on testnet; 1M of each test stablecoin).
-        try {
-          await tempo.faucet.fundSync({ account: account.address });
-          ok('funded from the Tempo faucet (tempo_fundAddress)');
-        } catch (e) {
-          warn(`faucet: ${(e as Error).message.split('\n')[0].slice(0, 120)}`);
-        }
-        const bal = await tempo.token.getBalance({ account: account.address, token: feeToken });
-        ok(`pathUSD balance ${JSON.stringify(bal, (_, v) => (typeof v === 'bigint' ? v.toString() : v))}`);
-        hash = await tempo.deployContract({ abi: abi as never, bytecode, args: [dwalletSigner, ledger, 'Tokenized T-Bill Fund', 'TBILL', account.address, genesisFor(t.key)] });
-      } else {
-        const bal = await publicClient.getBalance({ address: account.address });
-        if (bal === 0n) {
-          warn(`deployer ${account.address} has 0 ETH on ${t.key}. Fund it, then rerun. Faucets:`);
-          for (const f of t.faucets) console.log(`      ${f}`);
-          continue;
-        }
-        ok(`balance ${formatEther(bal)} ETH`);
-        const wallet = createWalletClient({ account, chain: t.chain, transport: http(t.rpc) });
-        hash = await wallet.deployContract({ abi: abi as never, bytecode, args: [dwalletSigner, ledger, 'Tokenized T-Bill Fund', 'TBILL', account.address, genesisFor(t.key)] });
+      const symbol = t.chain.nativeCurrency.symbol;
+      const bal = await publicClient.getBalance({ address: account.address });
+      if (bal === 0n) {
+        warn(`deployer ${account.address} has 0 ${symbol} on ${t.key}. Fund it, then rerun. Faucets:`);
+        for (const f of t.faucets) console.log(`      ${f}`);
+        continue;
       }
+      ok(`balance ${formatEther(bal)} ${symbol}`);
+      const wallet = createWalletClient({ account, chain: t.chain, transport: http(t.rpc) });
+      const hash: Hex = await wallet.deployContract({ abi: abi as never, bytecode, args: [dwalletSigner, ledger, 'Tokenized T-Bill Fund', 'TBILL', account.address, genesisFor(t.key)] });
       ok(`deploy tx ${hash} (genesis ${genesisFor(t.key) / 1_000_000n} TBILL to the treasury)`);
       const receipt = await publicClient.waitForTransactionReceipt({ hash });
       if (!receipt.contractAddress) throw new Error('no contractAddress in receipt');
@@ -150,7 +131,7 @@ async function main() {
       }
       if (!domainSeparator) throw new Error('DOMAIN_SEPARATOR read failed');
       const explorer = `${t.chain.blockExplorers?.default.url ?? ''}/address/${mintController}`;
-      out[String(chainId)] = { chainKey: t.key, chainId, mintController, dwalletSigner, ledger, domainSeparator, treasury: account.address, deployer: account.address, explorer, txHash: hash, rpcUrl: t.rpc, feeToken };
+      out[String(chainId)] = { chainKey: t.key, chainId, mintController, dwalletSigner, ledger, domainSeparator, treasury: account.address, deployer: account.address, explorer, txHash: hash, rpcUrl: t.rpc };
       ok(`MintController ${mintController}  ${explorer}`);
       ok(`domain separator ${domainSeparator}`);
       mkdirSync(dirname(OUT), { recursive: true });

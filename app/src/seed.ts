@@ -21,14 +21,14 @@ export const IDS = {
     ethereum: fake.evmAddress("tbill-mintcontroller-eth"),
     base: fake.evmAddress("tbill-mintcontroller-base"),
     sui: fake.suiAddress("tbill-move-package") + "::tbill::TBILL",
-    tempo: fake.evmAddress("tbill-mintcontroller-tempo"),
+    arc: fake.evmAddress("tbill-mintcontroller-arc"),
   } satisfies Record<ChainKey, string>,
   treasuries: {
     solana: fake.solanaAddress("tbill-treasury-solana"),
     ethereum: fake.evmAddress("tbill-treasury-eth"),
     base: fake.evmAddress("tbill-treasury-base"),
     sui: fake.suiAddress("tbill-treasury-sui"),
-    tempo: fake.evmAddress("tbill-treasury-tempo"),
+    arc: fake.evmAddress("tbill-treasury-arc"),
   } satisfies Record<ChainKey, string>,
 };
 
@@ -38,7 +38,7 @@ function authorityFor(chain: ChainKey): Pick<ChainDeployment, "authority" | "aut
       return { authority: IDS.mintAuthority, authorityKind: "pda", dwalletId: "program-pda" };
     case "ethereum":
     case "base":
-    case "tempo":
+    case "arc":
       return { authority: IDS.evmAddress, authorityKind: "address", dwalletId: "dw-secp256k1" };
     case "sui":
       return { authority: IDS.suiAddress, authorityKind: "address", dwalletId: "dw-ed25519" };
@@ -92,7 +92,7 @@ export function buildSeed(): LedgerState {
       curve: "secp256k1",
       publicKey: IDS.secpPubkey,
       identities: [{ label: "EVM address", value: IDS.evmAddress }],
-      chains: ["ethereum", "base", "tempo"],
+      chains: ["ethereum", "base", "arc"],
       onChainAddress: fake.solanaAddress("dwallet-pda-secp"),
       policyProgram: IDS.policyProgram,
       userShareLocation: "Issuer HSM, custodian backup (in production)",

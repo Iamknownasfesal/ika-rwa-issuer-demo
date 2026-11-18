@@ -1,6 +1,6 @@
 # TBILL issuer ledger
 
-A tokenized treasury fund issued on Solana, Ethereum, Base, Sui and Tempo, with one ledger on
+A tokenized treasury fund issued on Solana, Ethereum, Base, Sui and Arc, with one ledger on
 Solana deciding every mint and burn.
 
 On Solana, the ledger program holds the mint authority directly. On every other chain, the mint
@@ -14,11 +14,11 @@ console ──► issuer-ledger program (Solana) ──► mint on Solana
                      └─ signature voucher ─► Ika dWallet ──► signature
                                                                 │
 executor ── relays the signed authorization ◄───────────────────┘
-        └──► MintController on Ethereum, Base, Tempo · Move package on Sui
+        └──► MintController on Ethereum, Base, Arc · Move package on Sui
 ```
 
-It runs on test networks: Solana devnet, Ethereum Sepolia, Base Sepolia, Sui testnet and Tempo
-Moderato, with signatures from the Ika Solana pre-alpha.
+It runs on test networks: Solana devnet, Ethereum Sepolia, Base Sepolia, Sui testnet and Arc
+testnet, with signatures from the Ika Solana pre-alpha.
 
 ## How a mint works
 
@@ -40,7 +40,7 @@ The relayer only pays gas. It cannot change what was signed, and each nonce work
 | Path | What |
 |---|---|
 | `programs/issuer-ledger/` | Solana program (Pinocchio 0.11, `no_std`) and LiteSVM tests |
-| `contracts/evm/` | `MintController` for Ethereum, Base and Tempo (Foundry) |
+| `contracts/evm/` | `MintController` for Ethereum, Base and Arc (Foundry) |
 | `contracts/sui/tbill/` | `tbill` Move package for Sui |
 | `sdk/` | `@ika-rwa/ledger-sdk`: PDAs, instruction builders, decoders, policy checks, the Ika SDK wiring |
 | `executor/` | `@ika-rwa/executor`: runs a leg end to end (execute, sign, deliver, confirm) |

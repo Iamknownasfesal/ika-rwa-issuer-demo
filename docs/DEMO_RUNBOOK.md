@@ -11,7 +11,7 @@ scripts/deploy-program.sh
 pnpm setup:devnet                # Ika registration, DKG ×2 (zero-trust), contracts, Token-2022 mint, asset + 5 chains → deployments/devnet.json
 
 # 3. Smoke test one foreign leg from the CLI before going on stage:
-pnpm demo:intent -- --kind mint --dst 5 --amount 1000000 && sleep 6 && pnpm executor run --intent 0 --deliver live   # real Tempo mint
+pnpm demo:intent -- --kind mint --dst 5 --amount 1000000 && sleep 6 && pnpm executor run --intent 0 --deliver live   # real Arc mint
 
 # 4. Start the console in devnet mode; keep a second tab in mock mode as fallback:
 NEXT_PUBLIC_LEDGER_MODE=devnet LEDGER_DELIVER=live pnpm --filter @ika-rwa/app dev   # http://localhost:3000/console

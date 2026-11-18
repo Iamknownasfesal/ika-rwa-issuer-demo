@@ -1,6 +1,6 @@
 import type { ApproverId } from "@/demoConfig";
 
-export type ChainKey = "solana" | "ethereum" | "base" | "sui" | "tempo";
+export type ChainKey = "solana" | "ethereum" | "base" | "sui" | "arc";
 export type Curve = "ed25519" | "secp256k1";
 export type DWalletId = "dw-secp256k1" | "dw-ed25519";
 export type IntentType = "mint" | "burn" | "move";

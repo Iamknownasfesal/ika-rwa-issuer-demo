@@ -10,11 +10,11 @@ export const ChainId = {
   Ethereum: 2,
   Base: 3,
   Sui: 4,
-  Tempo: 5,
+  Arc: 5,
 } as const;
 export type ChainIdValue = (typeof ChainId)[keyof typeof ChainId];
 
-export type ChainKey = 'solana' | 'ethereum' | 'base' | 'sui' | 'tempo';
+export type ChainKey = 'solana' | 'ethereum' | 'base' | 'sui' | 'arc';
 
 /** `ChainDeployment.leg_kind`: 0 = Token-2022 CPI on Solana, 1 = Ika `issue_signature_voucher` CPI. */
 export const LegKind = { SolanaNative: 0, IkaForeign: 1 } as const;
@@ -85,7 +85,7 @@ export const CHAINS: Record<number, ChainMeta> = {
     explorerTx: (h) => `https://suiscan.xyz/testnet/tx/${h}`,
     explorerAddress: (a) => `https://suiscan.xyz/testnet/account/${a}`,
   },
-  [ChainId.Tempo]: evm(ChainId.Tempo, 'tempo', 'Tempo', 'tempo-moderato', 42431, 'https://explore.testnet.tempo.xyz'),
+  [ChainId.Arc]: evm(ChainId.Arc, 'arc', 'Arc', 'arc-testnet', 5042002, 'https://testnet.arcscan.app'),
 };
 
 export const CHAIN_LIST: ChainMeta[] = Object.values(CHAINS).sort((a, b) => a.id - b.id);

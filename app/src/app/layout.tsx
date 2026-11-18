@@ -10,7 +10,7 @@ const plexMono = IBM_Plex_Mono({ variable: "--font-plex-mono", subsets: ["latin"
 
 export const metadata: Metadata = {
   title: "TBILL issuer ledger",
-  description: "A tokenized treasury issued on Solana, Ethereum, Base, Sui and Tempo, governed by one Solana ledger and signed by Ika dWallets.",
+  description: "A tokenized treasury issued on Solana, Ethereum, Base, Sui and Arc, governed by one Solana ledger and signed by Ika dWallets.",
 };
 
 const themeScript = `try{if(location.pathname.startsWith('/console')&&localStorage.theme!=='light')document.documentElement.classList.add('dark')}catch(e){}`;

@@ -73,7 +73,7 @@ export function Hero() {
               On <span className="font-serif italic tracking-[-0.02em]">one ledger.</span>
             </p>
             <p className="rise max-w-[340px] text-[17px] leading-snug" style={{ animationDelay: "420ms" }}>
-              Issued on Solana, Ethereum, Base, Sui and Tempo. A Solana program approves every mint and burn, and Ika dWallets sign only what it approves.
+              Issued on Solana, Ethereum, Base, Sui and Arc. A Solana program approves every mint and burn, and Ika dWallets sign only what it approves.
             </p>
           </div>
 

@@ -58,10 +58,10 @@ export const CHAINS: Record<ChainKey, ChainMeta> = {
     fakeTx: fake.suiTx,
     isValidAddress: (s) => /^0x[0-9a-fA-F]{64}$/.test(s),
   },
-  tempo: evm("tempo", 5, "Tempo", "Moderato", "https://explore.testnet.tempo.xyz"),
+  arc: evm("arc", 5, "Arc", "Arc Testnet", "https://testnet.arcscan.app"),
 };
 
-export const CHAIN_ORDER: ChainKey[] = ["solana", "ethereum", "base", "sui", "tempo"];
+export const CHAIN_ORDER: ChainKey[] = ["solana", "ethereum", "base", "sui", "arc"];
 
 /** Listed alongside the live chains; intents cannot target these yet. */
 export const UNAVAILABLE_CHAINS = [{ key: "canton", name: "Canton", network: "Canton Network" }] as const;

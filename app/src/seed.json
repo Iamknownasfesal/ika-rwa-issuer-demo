@@ -27,7 +27,7 @@
       "cap": 15000000
     },
     {
-      "chain": "tempo",
+      "chain": "arc",
       "authorized": 3000000,
       "cap": 10000000
     }
@@ -80,7 +80,7 @@
     },
     {
       "type": "mint",
-      "chain": "tempo",
+      "chain": "arc",
       "amount": 3000000,
       "proposer": "bob",
       "approvers": [

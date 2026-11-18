@@ -1,16 +1,16 @@
 {
   "network": "testnet",
   "rpcUrl": "https://fullnode.testnet.sui.io:443",
-  "packageId": "0x191c4537c3af6ef7cb085758f1e4d27a6fe43d7eb21ac73d32a3b2fade317396",
-  "controllerId": "0xfc345623687544e05507f248ecb37f0020a7df07017a450ff9f60fad464b5ae4",
-  "adminCapId": "0xb63447a9dac953e733ad0f311db122b28e38da665fa7f518b0be3d8453902dd7",
-  "upgradeCapId": "0xc4b949800bb4786affa338ceb4d379f1ba9c82d1de4e261f4c1d9e59cc828ca8",
-  "coinType": "0x191c4537c3af6ef7cb085758f1e4d27a6fe43d7eb21ac73d32a3b2fade317396::tbill::TBILL",
+  "packageId": "0x0a956adc3d460c0d9f203a9e1782fd855151425fac5bc09fe3ac22a10d809853",
+  "controllerId": "0x8b2ee191d4dc86f43a3b3c39c08ed51c511d80b5431c6aaff4801b3cf062a88f",
+  "adminCapId": "0xadb9da7156947f27d9eca74d3fa00df384865be6f5f6ec6d6862b803290d9d3f",
+  "upgradeCapId": "0xf0acffc113cdd0f0c2fb0abe3211aa123185a838b5e69266ce5de4f37243a0f5",
+  "coinType": "0x0a956adc3d460c0d9f203a9e1782fd855151425fac5bc09fe3ac22a10d809853::tbill::TBILL",
   "dwalletPubkeyHex": "4c18b46303b8374dd94142df002f3e0d257801a19a0f1d99d26998c0550d3459",
-  "ledger": "8dvRSs7Ety6rsz7xjq5ujTe5LHg6H1qtvAQh8dVUcxJu",
+  "ledger": "49zWoi3zqsi53EVaExzqXa5REnQAA8VAZ8ABEDKeGMU3",
   "domainSeparatorHex": "c0e7365e9663ae1e4179ece63837fc0eea38f1c0edf68da1e02bba2924d4fe95",
   "treasury": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10",
   "deployer": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10",
-  "txDigest": "6tPNkXvD24gdTadQuRUfibQ9LApSJThaYTnSfyEKt2by",
-  "explorer": "https://suiscan.xyz/testnet/object/0x191c4537c3af6ef7cb085758f1e4d27a6fe43d7eb21ac73d32a3b2fade317396"
+  "txDigest": "EfSD54PSa9T5QNQpjRcYCuF6w5aYCqHCeyuCbJ79PDsP",
+  "explorer": "https://suiscan.xyz/testnet/object/0x0a956adc3d460c0d9f203a9e1782fd855151425fac5bc09fe3ac22a10d809853"
 }

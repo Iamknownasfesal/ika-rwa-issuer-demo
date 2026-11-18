@@ -226,7 +226,7 @@ export async function getLedger(): Promise<LedgerState> {
       curve: "secp256k1",
       publicKey: d.dwallets.secp256k1.publicKeyHex,
       identities: [{ label: "EVM address", value: d.dwallets.secp256k1.evmAddress }],
-      chains: ["ethereum", "base", "tempo"],
+      chains: ["ethereum", "base", "arc"],
       onChainAddress: d.dwallets.secp256k1.pda,
       policyProgram: d.programId,
       userShareLocation: "Issuer HSM, custodian backup (in production)",

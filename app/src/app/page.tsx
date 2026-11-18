@@ -46,7 +46,7 @@ const CHAINS_LIST: { key: ChainKey | UnavailableChainKey; name: string; how: str
   { key: "ethereum", name: "Ethereum", how: "MintController verifies an EIP-712 authorization from the secp256k1 dWallet." },
   { key: "base", name: "Base", how: "Same controller, same dWallet, its own domain separator." },
   { key: "sui", name: "Sui", how: "A Move package verifies an Ed25519 signature over the raw authorization." },
-  { key: "tempo", name: "Tempo", how: "MintController on Tempo. The relayer pays fees in stablecoin." },
+  { key: "arc", name: "Arc", how: "MintController on Arc, where the relayer pays gas in USDC." },
   { key: "canton", name: "Canton", how: "Unavailable.", unavailable: true },
 ];
 
@@ -73,7 +73,7 @@ const FAQ = [
   },
   {
     q: "Where does it run today?",
-    a: "Solana devnet, Ethereum Sepolia, Base Sepolia, Sui testnet and Tempo Moderato. Every mint and burn in the console lands on those networks.",
+    a: "Solana devnet, Ethereum Sepolia, Base Sepolia, Sui testnet and Arc testnet. Every mint and burn in the console lands on those networks.",
   },
 ];
 
