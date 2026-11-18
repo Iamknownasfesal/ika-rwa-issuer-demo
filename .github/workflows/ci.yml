@@ -11,7 +11,10 @@ jobs:
           sh -c "$(curl -sSfL https://release.anza.xyz/v4.3.0/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> $GITHUB_PATH
       - uses: Swatinem/rust-cache@v2
-      - run: cargo build-sbf --manifest-path programs/issuer-ledger/Cargo.toml
+      # No network feature: the tests load the Ika program at the local test address.
+      - run: cargo build-sbf --manifest-path programs/issuer-ledger/Cargo.toml --tools-version v1.54 --arch v3
+      # The devnet build must compile too; it goes to its own directory.
+      - run: cargo build-sbf --manifest-path programs/issuer-ledger/Cargo.toml --tools-version v1.54 --arch v3 --sbf-out-dir target/deploy-devnet -- --features devnet-pre-alpha
       - run: cargo test -p issuer-ledger
       - run: cargo clippy -p issuer-ledger --all-targets -- -D warnings
   typescript:

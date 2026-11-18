@@ -1,13 +1,13 @@
 import { address } from '@solana/kit';
 import { describe, expect, it } from 'vitest';
-import { decodeAsset, decodeChain, decodeIntent, decodeMessageApproval } from '../src/accounts.js';
-import { MESSAGE_APPROVAL, writeU16, writeU64 } from '../src/layout.js';
+import { decodeAsset, decodeChain, decodeIntent, decodeSignatureVoucher } from '../src/accounts.js';
+import { SIGNATURE_VOUCHER, writeU16, writeU64 } from '../src/layout.js';
 import type { Asset, ChainDeployment, Intent } from '../src/types.js';
 import { encodeAsset, encodeChain, encodeIntent } from './encode.js';
 
 const A = address('11111111111111111111111111111111');
 const B = address('TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb');
-const C = address('87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY');
+const C = address('8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv');
 const D = address('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL');
 
 describe('account decoders', () => {
@@ -27,7 +27,7 @@ describe('account decoders', () => {
       timelockSecs: 5n,
       bump: 254,
       mintAuthorityBump: 253,
-      ikaProgram: C,
+      ikaSigningKey: new Uint8Array(32).fill(0x1c),
     };
     const out = decodeAsset(D, encodeAsset(a));
     expect(out).toEqual({ ...a, address: D });
@@ -71,41 +71,46 @@ describe('account decoders', () => {
       approvalsBitmap: 0b101,
       approvalCount: 2,
       legs: [
-        { action: 1, chainId: 2, status: 2, messageDigest: new Uint8Array(32).fill(1), messageApproval: B, destTx: new Uint8Array(32).fill(0xe7), executedAt: 1n, confirmedAt: 2n },
-        { action: 0, chainId: 4, status: 1, messageDigest: new Uint8Array(32).fill(2), messageApproval: C, destTx: new Uint8Array(), executedAt: 3n, confirmedAt: 0n },
+        { action: 1, chainId: 2, status: 2, messageDigest: new Uint8Array(32).fill(1), signatureVoucher: B, destTx: new Uint8Array(32).fill(0xe7), executedAt: 1n, confirmedAt: 2n },
+        { action: 0, chainId: 4, status: 1, messageDigest: new Uint8Array(32).fill(2), signatureVoucher: C, destTx: new Uint8Array(), executedAt: 3n, confirmedAt: 0n },
       ],
       bump: 255,
     };
     expect(decodeIntent(B, encodeIntent(x))).toEqual({ ...x, address: B });
   });
 
-  it('decodes a negative i64 and a null messageApproval', () => {
+  it('decodes a negative i64 and a null signatureVoucher', () => {
     const x: Omit<Intent, 'address'> = {
       asset: D, index: 0n, kind: 0, status: 0, proposer: A, amount: 1n, srcChain: 0, dstChain: 1,
       recipient: new Uint8Array(32), source: new Uint8Array(), memo: '', createdAt: -5n, approvedAt: 0n,
       approvalsBitmap: 0, approvalCount: 0, bump: 1,
-      legs: [{ action: 0, chainId: 1, status: 0, messageDigest: new Uint8Array(32), messageApproval: null, destTx: new Uint8Array(), executedAt: 0n, confirmedAt: 0n }],
+      legs: [{ action: 0, chainId: 1, status: 0, messageDigest: new Uint8Array(32), signatureVoucher: null, destTx: new Uint8Array(), executedAt: 0n, confirmedAt: 0n }],
     };
     const out = decodeIntent(A, encodeIntent(x));
     expect(out.createdAt).toBe(-5n);
-    expect(out.legs[0].messageApproval).toBeNull();
+    expect(out.legs[0].signatureVoucher).toBeNull();
   });
 
-  it('decodes MessageApproval', () => {
-    const d = new Uint8Array(MESSAGE_APPROVAL.LEN);
-    d[0] = 14;
+  it('decodes SignatureVoucher', () => {
+    const d = new Uint8Array(SIGNATURE_VOUCHER.LEN);
+    d[0] = 108;
     d[1] = 1;
-    d.set(new Uint8Array(32).fill(9), MESSAGE_APPROVAL.MESSAGE_DIGEST);
-    writeU16(d, MESSAGE_APPROVAL.SIGNATURE_SCHEME, 5);
-    writeU64(d, MESSAGE_APPROVAL.EPOCH, 5n);
-    d[MESSAGE_APPROVAL.STATUS] = 1;
-    writeU16(d, MESSAGE_APPROVAL.SIGNATURE_LEN, 64);
-    d.set(new Uint8Array(64).fill(0x51), MESSAGE_APPROVAL.SIGNATURE);
-    const m = decodeMessageApproval(A, d);
+    d.set(new Uint8Array(32).fill(9), SIGNATURE_VOUCHER.MESSAGE_DIGEST);
+    writeU16(d, SIGNATURE_VOUCHER.SIGNATURE_SCHEME, 5);
+    d[SIGNATURE_VOUCHER.HAS_SIGNING_KEY] = 1;
+    d.set(new Uint8Array(32).fill(0x33), SIGNATURE_VOUCHER.SIGNING_KEY);
+    writeU64(d, SIGNATURE_VOUCHER.ISSUED_EPOCH, 5n);
+    d[SIGNATURE_VOUCHER.STATUS] = 1;
+    writeU16(d, SIGNATURE_VOUCHER.SIGNATURE_LEN, 64);
+    d.set(new Uint8Array(64).fill(0x51), SIGNATURE_VOUCHER.SIGNATURE);
+    const m = decodeSignatureVoucher(A, d);
     expect(m.status).toBe(1);
     expect(m.scheme).toBe(5);
+    expect(m.issuedEpoch).toBe(5n);
+    expect(m.signingKey?.[0]).toBe(0x33);
     expect(m.signature.length).toBe(64);
     expect(m.signature[0]).toBe(0x51);
     expect(m.messageDigest[0]).toBe(9);
+    expect(() => decodeSignatureVoucher(A, new Uint8Array(SIGNATURE_VOUCHER.LEN))).toThrow();
   });
 });

@@ -13,11 +13,19 @@ pinocchio = { workspace = true }
 pinocchio-system = { workspace = true }
 pinocchio-token-2022 = { workspace = true }
 solana-keccak-hasher = { workspace = true }
+solana-address = { workspace = true }
+ika-dwallet-pinocchio = { workspace = true }
+
+# The network the program is deployed on. It picks the only Ika program the
+# ledger calls and whose dWallets it accepts. Devnet builds use
+# `--features devnet-pre-alpha`; with none, the id is the local development
+# address the LiteSVM tests load `vendor/ika/ika_protocol_test.so` at.
+[features]
+devnet-pre-alpha = ["ika-dwallet-pinocchio/devnet-pre-alpha"]
 
 [dev-dependencies]
 litesvm = { workspace = true }
 solana-account = { workspace = true }
-solana-address = { workspace = true }
 solana-instruction = { workspace = true }
 solana-keypair = { workspace = true }
 solana-signer = { workspace = true }

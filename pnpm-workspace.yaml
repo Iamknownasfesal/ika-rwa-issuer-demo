@@ -5,6 +5,8 @@ packages:
 
 # pnpm 12: dependencies allowed to run postinstall scripts.
 allowBuilds:
+  bufferutil: false
   esbuild: true
   protobufjs: true
   unrs-resolver: true
+  utf-8-validate: false

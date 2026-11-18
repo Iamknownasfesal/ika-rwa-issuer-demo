@@ -23,6 +23,10 @@ export const LedgerError = {
   InvalidAccount: 20,
   Overflow: 21,
   SameChain: 22,
+  InvalidDWallet: 23,
+  DWalletNotOwned: 24,
+  DWalletMismatch: 25,
+  InvalidVoucher: 26,
 } as const;
 export type LedgerErrorCode = (typeof LedgerError)[keyof typeof LedgerError];
 
@@ -50,6 +54,10 @@ const MESSAGES: Record<number, { rule: string; message: string }> = {
   20: { rule: 'account', message: 'Account has the wrong owner or discriminator.' },
   21: { rule: 'overflow', message: 'Arithmetic overflow.' },
   22: { rule: 'chain', message: 'Source and destination chains must differ for a move.' },
+  23: { rule: 'dwallet', message: 'The dWallet account is not an active dWallet of the Ika program.' },
+  24: { rule: 'dwallet', message: 'The dWallet is not owned by the ledger program.' },
+  25: { rule: 'dwallet', message: 'The dWallet does not match the one registered for this chain.' },
+  26: { rule: 'voucher', message: 'The signature voucher account is not the voucher of this leg.' },
 };
 
 export function explainError(code: number): { rule: string; message: string } {

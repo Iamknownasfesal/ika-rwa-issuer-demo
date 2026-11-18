@@ -14,8 +14,8 @@
 //!   `structHash = keccak256(TYPEHASH || uint8 action || uint256 amount ||
 //!   bytes32 account || uint256 nonce || bytes32 ledger)`.
 //!
-//! In both cases the Ika `message_digest` is `keccak256(message)`, as required
-//! by the dWallet program's MessageApproval PDA derivation.
+//! In both cases the Ika `message_digest` is `keccak256(message)`: a signature
+//! voucher stores the Keccak-256 of the message whatever the scheme signs.
 //!
 //! This module is mirrored byte-for-byte in `sdk/src/digest.ts`.
 
@@ -107,7 +107,7 @@ pub fn eip712_message(a: &Authorization, out: &mut [u8; EIP712_MESSAGE_LEN]) {
 }
 
 /// keccak256 of the encoded authorization message. This is the value stored
-/// in the Ika `MessageApproval` and in the leg.
+/// in the Ika signature voucher and in the leg.
 pub fn message_digest(encoding: u8, a: &Authorization) -> [u8; 32] {
     if encoding == crate::state::chain::ENCODING_EIP712 {
         let mut m = [0u8; EIP712_MESSAGE_LEN];

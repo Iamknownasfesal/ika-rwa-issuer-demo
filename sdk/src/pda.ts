@@ -36,7 +36,20 @@ export async function findMintAuthorityPda(programId: Address, asset: Address): 
   });
 }
 
-/** `["__ika_cpi_authority"]`: the dWallet authority that only this program can sign for. */
+/** `["signature_voucher", intent, leg_index(1)]`: the Ika signature voucher the ledger issues for one foreign leg. */
+export async function findSignatureVoucherPda(programId: Address, intent: Address, legIndex: number): Promise<Pda> {
+  return getProgramDerivedAddress({
+    programAddress: programId,
+    seeds: [utf8('signature_voucher'), addr().encode(intent), new Uint8Array([legIndex])],
+  });
+}
+
+/** `["dwallet_coordinator"]` under the Ika program. */
+export async function findCoordinatorPda(ikaProgram: Address): Promise<Pda> {
+  return getProgramDerivedAddress({ programAddress: ikaProgram, seeds: [utf8('dwallet_coordinator')] });
+}
+
+/** `["__ika_cpi_authority"]`: the dWallet owner that only this program can sign for. */
 export async function findCpiAuthorityPda(programId: Address): Promise<Pda> {
   return getProgramDerivedAddress({ programAddress: programId, seeds: [utf8('__ika_cpi_authority')] });
 }

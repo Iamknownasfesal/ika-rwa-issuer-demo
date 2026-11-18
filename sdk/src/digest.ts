@@ -114,7 +114,7 @@ export function authorizationMessage(encoding: number, a: Authorization): Uint8A
   return encoding === Encoding.Eip712 ? eip712Message(a) : rawMessage(a);
 }
 
-/** keccak256(message): stored in the leg and in the Ika MessageApproval. */
+/** keccak256(message): stored in the leg and in the Ika signature voucher. */
 export function messageDigest(encoding: number, a: Authorization): Uint8Array {
   return keccak_256(authorizationMessage(encoding, a));
 }

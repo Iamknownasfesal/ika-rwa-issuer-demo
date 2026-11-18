@@ -53,6 +53,14 @@ pub enum LedgerError {
     Overflow = 21,
     /// Source and destination chains must differ for a move.
     SameChain = 22,
+    /// The dWallet account is not an active dWallet of the Ika program.
+    InvalidDWallet = 23,
+    /// The dWallet's owner is not this program's CPI authority.
+    DWalletNotOwned = 24,
+    /// The dWallet's curve or public key differs from the chain's.
+    DWalletMismatch = 25,
+    /// The signature voucher account is not this leg's voucher PDA.
+    InvalidVoucher = 26,
 }
 
 impl From<LedgerError> for ProgramError {

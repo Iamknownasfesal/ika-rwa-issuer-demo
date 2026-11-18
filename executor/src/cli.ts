@@ -15,7 +15,7 @@ function print(e: StepEvent): void {
   const parts = [`[leg ${e.leg}] ${icon} ${e.step}`, e.detail ?? ''];
   if (e.txHash) parts.push(`tx=${e.txHash}`);
   if (e.explorer) parts.push(e.explorer);
-  if (e.messageApproval) parts.push(`messageApproval=${e.messageApproval}`);
+  if (e.signatureVoucher) parts.push(`voucher=${e.signatureVoucher}`);
   if (e.signature) parts.push(`sig=${e.signature.slice(0, 32)}…`);
   console.log(parts.filter(Boolean).join('  '));
 }

@@ -8,5 +8,3 @@ export * from './digest.js';
 export * from './policy.js';
 export * from './errors.js';
 export * from './format.js';
-export * from './ika/pda.js';
-export * from './ika/attestation.js';

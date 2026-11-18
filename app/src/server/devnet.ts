@@ -1,5 +1,5 @@
 /**
- * Server-side bridge to the real ledger: Solana devnet program + Ika pre-alpha.
+ * Server-side bridge to the real ledger: Solana devnet program + Ika devnet pre-alpha.
  * Used only by the API routes. Loads the workspace packages dynamically so the
  * app compiles in mock mode without them.
  */
@@ -175,7 +175,7 @@ function mapIntent(d: Deployment, it: SdkIntent, chains: ChainDeployment[]): Int
     return {
       ...base,
       status: l.status === 2 ? "confirmed" : "signing",
-      messageApproval: l.messageApproval ?? undefined,
+      signatureVoucher: l.signatureVoucher ?? undefined,
       messageDigest: l.messageDigest.some((b) => b) ? "0x" + hex(l.messageDigest) : undefined,
       // Sui transaction digests are base58, unlike Sui addresses.
       destTxHash: l.destTx.length ? (key === "sui" ? base58(l.destTx) : bytesToChainString(key, l.destTx)) : undefined,
@@ -230,7 +230,7 @@ export async function getLedger(): Promise<LedgerState> {
       onChainAddress: d.dwallets.secp256k1.pda,
       policyProgram: d.programId,
       userShareLocation: "Issuer HSM, custodian backup (in production)",
-      networkShareControl: `Authority = CPI PDA ${d.cpiAuthority}`,
+      networkShareControl: `Owner = the ledger's CPI authority ${d.cpiAuthority}`,
     },
     {
       id: "dw-ed25519",
@@ -241,7 +241,7 @@ export async function getLedger(): Promise<LedgerState> {
       onChainAddress: d.dwallets.curve25519.pda,
       policyProgram: d.programId,
       userShareLocation: "Issuer HSM, custodian backup (in production)",
-      networkShareControl: `Authority = CPI PDA ${d.cpiAuthority}`,
+      networkShareControl: `Owner = the ledger's CPI authority ${d.cpiAuthority}`,
     },
   ];
   return {
@@ -348,19 +348,8 @@ export async function* execute(intentId: string): AsyncGenerator<StepEvent | { d
   let ledger = await getLedger();
   let intent = ledger.intents.find((i) => i.id === intentId);
   if (!intent) throw new Error("Unknown intent");
-  const cfg = {
-    rpcUrl: d.rpcUrl,
-    wsUrl: d.wsUrl ?? d.rpcUrl.replace(/^http/, "ws"),
-    grpcUrl: d.grpcUrl,
-    programId: d.programId,
-    ikaProgram: d.ikaProgram,
-    asset: d.asset,
-    executorKeypair: await executorSigner(),
-    deliver: (process.env.LEDGER_DELIVER === "live" || process.env.LEDGER_DELIVER === "evm" ? "live" : "mock") as "mock" | "live",
-    evm: process.env.EVM_RPC_URL
-      ? { rpcUrl: process.env.EVM_RPC_URL, mintController: process.env.EVM_MINT_CONTROLLER ?? "", privateKey: process.env.EVM_RELAYER_KEY ?? "" }
-      : undefined,
-  };
+  const deliver = process.env.LEDGER_DELIVER === "live" || process.env.LEDGER_DELIVER === "evm" ? "live" : "mock";
+  const cfg = await executor.configFromDeployment(d, await executorSigner(), deliver);
   for (let leg = 0; leg < intent.legs.length; leg++) {
     const ex: LegExecution = { ...(intent.execution?.legs[leg] ?? { status: "pending" }) };
     if (ex.status === "confirmed") continue;
@@ -369,7 +358,7 @@ export async function* execute(intentId: string): AsyncGenerator<StepEvent | { d
       const st = step(ev.step);
       ex.status = st === 1 ? "policy" : st === 2 ? "signing" : "broadcast";
       if (ev.step === "policy" && ev.txHash) ex.policyTxHash = ev.txHash;
-      if (ev.messageApproval) ex.messageApproval = ev.messageApproval;
+      if (ev.signatureVoucher) ex.signatureVoucher = ev.signatureVoucher;
       if (ev.step === "ika-signature" && ev.signature) {
         ex.signature = ev.signature;
         ex.ikaSignatureId = `sig-${ev.signature.replace(/^0x/, "").slice(0, 12)}`;
@@ -414,7 +403,7 @@ async function withRetry<T>(fn: () => Promise<T>, attempts = 6): Promise<T> {
 /**
  * Every Solana transaction that touched this intent, read back from devnet:
  * create_intent, each approve_intent, execute_leg and confirm_leg on the intent
- * account, plus the Ika network's CommitSignature on each MessageApproval.
+ * account, plus the Ika network's CommitSignature on each leg's signature voucher.
  */
 export async function activity(intentId: string): Promise<ActivityEntry[]> {
   const d = await deployment();
@@ -427,7 +416,7 @@ export async function activity(intentId: string): Promise<ActivityEntry[]> {
   const names = new Map<string, string>([[d.executor, "Executor"], ...d.approvers.map((a) => [a.pubkey, a.name] as [string, string])]);
 
   const intent = (await sdk.fetchIntents(rpc, programId, assetAddr)).find((i) => Number(i.index) === index);
-  const approvals = (intent?.legs ?? []).map((l) => l.messageApproval).filter((a): a is Address => !!a);
+  const vouchers = (intent?.legs ?? []).map((l) => l.signatureVoucher);
 
   const load = async (account: Address) => {
     const sigs = await withRetry(() => rpc.getSignaturesForAddress(account, { limit: 50 }).send());
@@ -436,7 +425,8 @@ export async function activity(intentId: string): Promise<ActivityEntry[]> {
     for (const s of sigs.filter((x) => !x.err)) {
       let tx: RpcTx = TX_CACHE.get(s.signature) ?? null;
       if (!tx) {
-        tx = await withRetry(() => rpc.getTransaction(s.signature, { encoding: "json", maxSupportedTransactionVersion: 0 }).send());
+        // The Ika network sends version 1 transactions; kit's types stop at version 0.
+        tx = await withRetry(() => rpc.getTransaction(s.signature, { encoding: "json", maxSupportedTransactionVersion: 1 as 0 }).send());
         if (tx) TX_CACHE.set(s.signature, tx);
       }
       rows.push({ s, tx });
@@ -463,9 +453,10 @@ export async function activity(intentId: string): Promise<ActivityEntry[]> {
       leg: kind === "execute" || kind === "confirm" ? data[1] : undefined,
     });
   }
-  // The network's signature lands on the MessageApproval in its own transaction.
-  for (const [leg, ma] of approvals.entries()) {
-    for (const { s, tx } of await load(ma)) {
+  // The network's signature lands in the voucher in its own transaction.
+  for (const [leg, voucher] of vouchers.entries()) {
+    if (!voucher) continue;
+    for (const { s, tx } of await load(voucher)) {
       if (!tx || out.some((e) => e.signature === s.signature)) continue;
       const signer = (tx.transaction.message.accountKeys as readonly string[])[0];
       out.push({

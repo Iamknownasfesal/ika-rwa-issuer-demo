@@ -70,8 +70,8 @@ export function ExecutionStepper({ intent }: { intent: Intent }) {
                 ) : (
                   <>
                     <div>
-                      MessageApproval{" "}
-                      <Hash value={ex?.messageApproval} href={ex?.messageApproval && devnet ? CHAINS.solana.explorerAddress(ex.messageApproval) : undefined} />
+                      Signature voucher{" "}
+                      <Hash value={ex?.signatureVoucher} href={ex?.signatureVoucher && devnet ? CHAINS.solana.explorerAddress(ex.signatureVoucher) : undefined} />
                     </div>
                     <div>
                       {ex?.dwalletId} · {ex?.curve}

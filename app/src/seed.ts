@@ -11,7 +11,7 @@ export const IDS = {
   assetPda: fake.solanaAddress("issuer-ledger-asset"),
   cpiAuthority: fake.solanaAddress("issuer-ledger-cpi-authority"),
   mintAuthority: fake.solanaAddress("issuer-ledger-mint-authority"),
-  ikaProgram: "87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY",
+  ikaProgram: "8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv",
   secpPubkey: "02" + fake.pubkeyHex("dw-secp256k1", 32),
   edPubkey: fake.pubkeyHex("dw-ed25519", 32),
   evmAddress: fake.evmAddress("dw-secp256k1-evm"),
@@ -96,7 +96,7 @@ export function buildSeed(): LedgerState {
       onChainAddress: fake.solanaAddress("dwallet-pda-secp"),
       policyProgram: IDS.policyProgram,
       userShareLocation: "Issuer HSM, custodian backup (in production)",
-      networkShareControl: `Signs only MessageApprovals created by policy program ${IDS.policyProgram}`,
+      networkShareControl: `Signs only under signature vouchers issued by policy program ${IDS.policyProgram}`,
     },
     {
       id: "dw-ed25519",
@@ -107,7 +107,7 @@ export function buildSeed(): LedgerState {
       onChainAddress: fake.solanaAddress("dwallet-pda-ed"),
       policyProgram: IDS.policyProgram,
       userShareLocation: "Issuer HSM, custodian backup (in production)",
-      networkShareControl: `Signs only MessageApprovals created by policy program ${IDS.policyProgram}`,
+      networkShareControl: `Signs only under signature vouchers issued by policy program ${IDS.policyProgram}`,
     },
   ];
 
@@ -140,7 +140,7 @@ export function buildSeed(): LedgerState {
           {
             status: "confirmed",
             policyTxHash: fake.solanaTx(`${tag}-policy`),
-            messageApproval: isSolana ? undefined : fake.solanaAddress(`${tag}-ma`),
+            signatureVoucher: isSolana ? undefined : fake.solanaAddress(`${tag}-voucher`),
             messageDigest: isSolana ? undefined : fake.digest(`${tag}-digest`),
             ikaSignatureId: isSolana ? undefined : `sig-${fake.pubkeyHex(`${tag}-sig`, 6)}`,
             signature: isSolana ? undefined : "0x" + fake.pubkeyHex(`${tag}-sigbytes`, 64),

@@ -109,6 +109,22 @@ export async function sendInstructions(client: SolanaClient, payer: KeyPairSigne
   throw new Error(`timeout confirming ${signature}`);
 }
 
+/**
+ * Wait until `signature` is finalized. The Ika network reads Solana at finalized commitment, so
+ * a request that depends on a transaction is sent only after this returns.
+ */
+export async function waitForFinalized(rpc: SolanaRpc, signature: Signature, timeoutMs = 120_000): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const status = await rpc.getSignatureStatuses([signature], { searchTransactionHistory: true }).send();
+    const s = status.value[0];
+    if (s?.err) throw new Error(`transaction ${signature} failed: ${JSON.stringify(s.err)}`);
+    if (s?.confirmationStatus === 'finalized') return;
+    await new Promise((r) => setTimeout(r, 1_500));
+  }
+  throw new Error(`timeout waiting for ${signature} to be finalized`);
+}
+
 export async function accountExists(rpc: SolanaRpc, address: Address): Promise<boolean> {
   const acc = await fetchEncodedAccount(rpc, address);
   return acc.exists;

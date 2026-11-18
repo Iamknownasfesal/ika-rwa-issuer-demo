@@ -107,19 +107,19 @@ export class MockExecutor implements Executor {
       if (leg.action === "mint") dep.authorized += leg.amount;
       else dep.authorized -= leg.amount;
       dep.lastActivity = new Date().toISOString();
-      emit(1, "ok", isSolana ? "Token-2022 mint authority CPI executed" : "MessageApproval created via CPI to the Ika dWallet program");
+      emit(1, "ok", isSolana ? "Token-2022 mint authority CPI executed" : "Signature voucher issued via CPI to the Ika program");
 
       // Step 2: Ika signature (foreign chains). The Solana leg is signed by the program PDA itself.
       ex.status = "signing";
       emit(2, "start", isSolana ? "No external signature needed" : `Ika network signs with the ${meta.curve} dWallet`);
       await sleep(isSolana ? Math.min(delay, 400) : delay);
       if (!isSolana) {
-        ex.messageApproval = fake.solanaAddress(`${tag}-ma`);
+        ex.signatureVoucher = fake.solanaAddress(`${tag}-voucher`);
         ex.messageDigest = fake.digest(`${tag}-digest`);
         ex.ikaSignatureId = `sig-${fake.pubkeyHex(`${tag}-sig`, 6)}`;
         ex.signature = "0x" + fake.pubkeyHex(`${tag}-sigbytes`, 64);
       }
-      emit(2, "ok", isSolana ? "Program PDA is the mint authority" : "Signature committed on the MessageApproval PDA");
+      emit(2, "ok", isSolana ? "Program PDA is the mint authority" : "Signature committed in the voucher on Solana");
 
       // Step 3: destination confirmation.
       ex.status = "broadcast";

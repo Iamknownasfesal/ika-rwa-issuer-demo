@@ -20,17 +20,17 @@
     "src"
   ],
   "scripts": {
-    "build": "tsc -p tsconfig.json && cp src/ika/ika_dwallet.proto dist/ika/",
+    "build": "tsc -p tsconfig.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "lint": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
-    "@grpc/grpc-js": "^1.14.5",
-    "@grpc/proto-loader": "^0.8.1",
-    "@mysten/bcs": "^2.1.1",
+    "@ika.xyz/pre-alpha-core": "0.1.0",
+    "@ika.xyz/pre-alpha-solana": "0.1.0",
     "@noble/hashes": "^2.4.0",
-    "@solana/kit": "^8.3.0",
+    "@solana/kit": "^8.4.0",
+    "@solana/web3.js": "^1.98.4",
     "bs58": "^6.0.0"
   },
   "devDependencies": {

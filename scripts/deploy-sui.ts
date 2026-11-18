@@ -11,9 +11,8 @@
  */
 import { fetchChains, fromBase58, keccak256, toHex } from '@ika-rwa/ledger-sdk';
 import { createClient, loadDeployment, repoRoot } from '@ika-rwa/executor';
-// Not yet re-exported from the executor index (integration pending); import the module directly.
-import { pickSuiRpc } from '../executor/src/deliver/sui.js';
-import { SuiClient } from '@mysten/sui/client';
+import { suiClient, suiRpcUrl } from '../executor/src/deliver/sui.js';
+import type { SuiGrpcClient } from '@mysten/sui/grpc';
 import { getFaucetHost, requestSuiFromFaucetV2 } from '@mysten/sui/faucet';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
 import { Transaction } from '@mysten/sui/transactions';
@@ -48,11 +47,20 @@ function loadOrCreateKey(): Ed25519Keypair {
   return kp;
 }
 
-async function balance(client: SuiClient, addr: string): Promise<bigint> {
-  return BigInt((await client.getBalance({ owner: addr })).totalBalance);
+async function balance(client: SuiGrpcClient, addr: string): Promise<bigint> {
+  return BigInt((await client.getBalance({ owner: addr })).balance.balance);
 }
 
-async function ensureFunded(client: SuiClient, preferred: Ed25519Keypair): Promise<Ed25519Keypair> {
+/** Sign and execute `tx`, wait until reads reflect it, and throw when it aborted on chain. */
+async function execute(client: SuiGrpcClient, signer: Ed25519Keypair, tx: Transaction, what: string) {
+  const res = await client.signAndExecuteTransaction({ signer, transaction: tx, include: { effects: true, objectTypes: true } });
+  const executed = res.Transaction ?? res.FailedTransaction;
+  if (!executed.status.success) throw new Error(`${what} failed: ${JSON.stringify(executed.status.error)}`);
+  await client.waitForTransaction({ digest: executed.digest });
+  return executed;
+}
+
+async function ensureFunded(client: SuiGrpcClient, preferred: Ed25519Keypair): Promise<Ed25519Keypair> {
   const addr = preferred.toSuiAddress();
   if ((await balance(client, addr)) >= MIN_BALANCE) return preferred;
   for (let attempt = 1; attempt <= 3; attempt++) {
@@ -104,9 +112,9 @@ async function main(): Promise<void> {
   }
   val('domain separator', toHex(domain));
 
-  const RPC = await pickSuiRpc();
-  val('rpc', RPC);
-  const client = new SuiClient({ url: RPC });
+  const RPC = suiRpcUrl();
+  val('rpc (gRPC)', RPC);
+  const client = suiClient();
   log('1/3', 'deployer');
   const deployer = await ensureFunded(client, loadOrCreateKey());
   const deployerAddr = deployer.toSuiAddress();
@@ -129,17 +137,15 @@ async function main(): Promise<void> {
     tx.setSender(deployerAddr);
     const [cap] = tx.publish({ modules, dependencies });
     tx.transferObjects([cap], deployerAddr);
-    const res = await client.signAndExecuteTransaction({ signer: deployer, transaction: tx, options: { showObjectChanges: true, showEffects: true } });
-    if (res.effects?.status.status !== 'success') throw new Error(`publish failed: ${res.effects?.status.error}`);
-    await client.waitForTransaction({ digest: res.digest });
+    const res = await execute(client, deployer, tx, 'publish');
     txDigest = res.digest;
-    const changes = res.objectChanges ?? [];
-    const published = changes.find((c) => c.type === 'published');
-    if (!published || published.type !== 'published') throw new Error('no published package in object changes');
-    packageId = published.packageId;
+    const changes = res.effects.changedObjects;
+    const published = changes.find((c) => c.outputState === 'PackageWrite');
+    if (!published) throw new Error('no published package among the changed objects');
+    packageId = published.objectId;
     const created = (suffix: string) => {
-      const c = changes.find((x) => x.type === 'created' && x.objectType.endsWith(suffix));
-      if (!c || c.type !== 'created') throw new Error(`created object ${suffix} not found`);
+      const c = changes.find((x) => x.idOperation === 'Created' && res.objectTypes[x.objectId]?.endsWith(suffix));
+      if (!c) throw new Error(`created object ${suffix} not found`);
       return c.objectId;
     };
     controllerId = created('::tbill::MintController');
@@ -172,9 +178,7 @@ async function main(): Promise<void> {
       arguments: [tx.object(adminCapId), tx.object(controllerId), tx.pure.u64(genesis), tx.pure.address(deployerAddr)],
     });
   }
-  const res = await client.signAndExecuteTransaction({ signer: deployer, transaction: tx, options: { showEffects: true } });
-  if (res.effects?.status.status !== 'success') throw new Error(`set_params failed: ${res.effects?.status.error}`);
-  await client.waitForTransaction({ digest: res.digest });
+  const res = await execute(client, deployer, tx, 'set_params');
   ok(`controller bound${rebinding ? '' : `, genesis ${genesis / 1_000_000n} TBILL to ${deployerAddr}`} (${res.digest})`);
 
   const out = {

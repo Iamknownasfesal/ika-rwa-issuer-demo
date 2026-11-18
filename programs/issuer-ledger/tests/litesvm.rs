@@ -2,15 +2,19 @@
 //! LiteSVM integration tests for the issuer ledger.
 //!
 //! Exercises the full lifecycle against the real Token-2022 program (bundled
-//! with LiteSVM) and the real Ika dWallet program binary vendored from
-//! `dwallet-labs/ika-pre-alpha` (`vendor/ika/ika_dwallet_program.so`).
+//! with LiteSVM) and the real Ika program binary vendored from
+//! `dwallet-labs/ika-pre-alpha` (`vendor/ika/ika_protocol_test.so`), built for
+//! the local development address that `ika_dwallet_pinocchio::ID` names when
+//! no network feature is on. Build the ledger without a network feature too.
 
 use issuer_ledger::{
     digest::{Authorization, leg_nonce, message_digest},
     error::LedgerError,
     ika::{
-        CPI_AUTHORITY_SEED, CURVE_CURVE25519, CURVE_SECP256K1, SCHEME_ECDSA_KECCAK256,
-        SCHEME_EDDSA_SHA512,
+        CPI_AUTHORITY_SEED, CURVE_CURVE25519, CURVE_SECP256K1, DISC_SIGNATURE_VOUCHER,
+        IKA_PROGRAM_ID, SCHEME_ECDSA_KECCAK256, SCHEME_EDDSA_SHA512, SIGNATURE_VOUCHER_LEN,
+        VOUCHER_DWALLET, VOUCHER_MESSAGE_DIGEST, VOUCHER_OWNER, VOUCHER_SIGNATURE_SCHEME,
+        VOUCHER_SIGNING_KEY, VOUCHER_STATUS,
     },
     state::{ADDR_BYTES, ADDR_LEN, asset, chain, intent, leg, leg_offset, read_u16, read_u64},
 };
@@ -29,14 +33,15 @@ const LEDGER_SO: &str = concat!(
 );
 const DWALLET_SO: &str = concat!(
     env!("CARGO_MANIFEST_DIR"),
-    "/../../vendor/ika/ika_dwallet_program.so"
+    "/../../vendor/ika/ika_protocol_test.so"
 );
 
 const SYSTEM_PROGRAM: Address = Address::new_from_array([0u8; 32]);
 const TOKEN_2022: Address = Address::from_str_const("TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb");
-/// Program id the vendored dWallet binary is deployed at in tests.
-const DWALLET_PROGRAM: Address =
-    Address::from_str_const("87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY");
+/// The address the vendored Ika binary is built for and loaded at.
+const DWALLET_PROGRAM: Address = IKA_PROGRAM_ID;
+/// The issuer's Ika request key: the only key that may ask for a voucher's signature.
+const IKA_SIGNING_KEY: [u8; 32] = [0x51u8; 32];
 
 // Chain ids used by the demo.
 const CHAIN_SOLANA: u16 = 1;
@@ -57,47 +62,38 @@ fn ika_program_account(data: Vec<u8>) -> Account {
     }
 }
 
+/// A DWalletCoordinator at epoch 5, not paused, as the network writes it.
 fn coordinator_data(bump: u8) -> Vec<u8> {
-    let mut d = vec![0u8; 116];
-    d[0] = 1;
+    let mut d = vec![0u8; 727];
+    d[0] = 96;
     d[1] = 1;
-    d[2..34].copy_from_slice(Address::new_unique().as_array());
-    d[34..42].copy_from_slice(&5u64.to_le_bytes());
-    d[51] = bump;
+    d[2..10].copy_from_slice(&5u64.to_le_bytes()); // epoch
+    d[18] = 0; // paused
+    d[19] = bump;
+    d[84..116].copy_from_slice(Address::new_unique().as_array()); // pauser
+    let chain_identifier = [0x00u8, 0x01, 0x00, 0x02, 0x00, 0x00];
+    d[116] = chain_identifier.len() as u8;
+    d[117..123].copy_from_slice(&chain_identifier);
+    d[568] = Address::find_program_address(&[b"vault_authority"], &DWALLET_PROGRAM).1;
+    d[569..573].copy_from_slice(&1u32.to_le_bytes()); // chain number
+    d[630] = 3; // network
     d
 }
 
-/// `["dwallet", chunks_of(curve_u16_le || public_key)]`
-fn dwallet_seeds(curve: u16, pk: &[u8]) -> Vec<Vec<u8>> {
+/// `["dwallet", "record", chunks_of(curve_u16_le || public_key)]`
+fn dwallet_pda(curve: u16, pk: &[u8]) -> (Address, u8) {
     let mut payload = curve.to_le_bytes().to_vec();
     payload.extend_from_slice(pk);
-    let mut seeds = vec![b"dwallet".to_vec()];
-    for c in payload.chunks(32) {
-        seeds.push(c.to_vec());
-    }
-    seeds
+    let mut seeds: Vec<&[u8]> = vec![b"dwallet", b"record"];
+    seeds.extend(payload.chunks(32));
+    Address::find_program_address(&seeds, &DWALLET_PROGRAM)
 }
 
-fn dwallet_pda(curve: u16, pk: &[u8]) -> (Address, u8) {
-    let seeds = dwallet_seeds(curve, pk);
-    let refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
-    Address::find_program_address(&refs, &DWALLET_PROGRAM)
-}
-
-fn message_approval_pda(curve: u16, pk: &[u8], scheme: u16, digest: &[u8; 32]) -> (Address, u8) {
-    let mut seeds = dwallet_seeds(curve, pk);
-    seeds.push(b"message_approval".to_vec());
-    seeds.push(scheme.to_le_bytes().to_vec());
-    seeds.push(digest.to_vec());
-    let refs: Vec<&[u8]> = seeds.iter().map(|s| s.as_slice()).collect();
-    Address::find_program_address(&refs, &DWALLET_PROGRAM)
-}
-
-fn dwallet_data(authority: &Address, curve: u16, pk: &[u8], bump: u8) -> Vec<u8> {
-    let mut d = vec![0u8; 153];
-    d[0] = 2;
+fn dwallet_data(owner: &Address, curve: u16, pk: &[u8], bump: u8) -> Vec<u8> {
+    let mut d = vec![0u8; 185];
+    d[0] = 97;
     d[1] = 1;
-    d[2..34].copy_from_slice(authority.as_array());
+    d[2..34].copy_from_slice(owner.as_array());
     d[34..36].copy_from_slice(&curve.to_le_bytes());
     d[36] = 1; // Active
     d[37] = pk.len() as u8;
@@ -339,7 +335,7 @@ impl Ctx {
         d.extend_from_slice(&timelock.to_le_bytes());
         d.extend_from_slice(&global_cap.to_le_bytes());
         d.extend_from_slice(self.executor.pubkey().as_array());
-        d.extend_from_slice(DWALLET_PROGRAM.as_array());
+        d.extend_from_slice(&IKA_SIGNING_KEY);
         d.push(bump);
         d.push(self.mint_authority_bump);
         d.push(self.approvers.len() as u8);
@@ -492,7 +488,19 @@ impl Ctx {
         }
     }
 
-    /// Returns (ix, message_approval pda, expected digest).
+    /// The leg's signature voucher: the ledger's PDA `["signature_voucher", intent, leg_index]`.
+    fn voucher_pda(&self, index: u64, leg_index: u8) -> (Address, u8) {
+        Address::find_program_address(
+            &[
+                b"signature_voucher",
+                self.intent_pda(index).0.as_array(),
+                &[leg_index],
+            ],
+            &self.program_id,
+        )
+    }
+
+    /// Returns (ix, signature voucher, expected digest).
     fn execute_foreign_ix(
         &self,
         index: u64,
@@ -513,7 +521,7 @@ impl Ctx {
             domain_separator: &[0xD0u8; 32],
         };
         let digest = message_digest(encoding, &auth);
-        let (ma, ma_bump) = message_approval_pda(dw.1, &dw.2, dw.3, &digest);
+        let (ma, ma_bump) = self.voucher_pda(index, leg_index);
         let ix = Instruction {
             program_id: self.program_id,
             accounts: vec![
@@ -766,7 +774,7 @@ fn solana_burn_from_treasury() {
 }
 
 #[test]
-fn ethereum_mint_creates_ika_message_approval() {
+fn ethereum_mint_issues_ika_signature_voucher() {
     let mut ctx = Ctx::new();
     ctx.setup_demo();
     let amount = 2_500_000 * ONE;
@@ -800,24 +808,36 @@ fn ethereum_mint_creates_ika_message_approval() {
     let ex = ctx.executor();
     ctx.send(&[ix], &[&ex]).unwrap();
 
-    // MessageApproval PDA created by the dWallet program via CPI.
+    // SignatureVoucher created by the Ika program via CPI, at the leg's PDA.
     let m = ctx.data(&ma);
-    assert_eq!(m.len(), 312, "MessageApproval length");
-    assert_eq!(m[0], 14, "MessageApproval discriminator");
-    assert_eq!(&m[2..34], dw.0.as_array(), "dwallet");
-    assert_eq!(&m[34..66], &digest, "message_digest");
+    assert_eq!(m.len(), SIGNATURE_VOUCHER_LEN, "SignatureVoucher length");
+    assert_eq!(m[0], DISC_SIGNATURE_VOUCHER, "SignatureVoucher tag");
     assert_eq!(
-        &m[98..130],
+        &m[VOUCHER_DWALLET..VOUCHER_DWALLET + 32],
+        dw.0.as_array(),
+        "dwallet"
+    );
+    assert_eq!(
+        &m[VOUCHER_MESSAGE_DIGEST..VOUCHER_MESSAGE_DIGEST + 32],
+        &digest,
+        "message_digest"
+    );
+    assert_eq!(
+        &m[VOUCHER_OWNER..VOUCHER_OWNER + 32],
         ctx.cpi_authority.as_array(),
-        "approver = CPI authority"
+        "owner = CPI authority"
+    );
+    assert_eq!(m[VOUCHER_SIGNING_KEY - 1], 1, "has signing key");
+    assert_eq!(
+        &m[VOUCHER_SIGNING_KEY..VOUCHER_SIGNING_KEY + 32],
+        &IKA_SIGNING_KEY,
+        "signing key = the asset's Ika request key"
     );
     assert_eq!(
-        &m[130..162],
-        ctx.executor.pubkey().as_array(),
-        "user_pubkey = executor"
+        read_u16(&m, VOUCHER_SIGNATURE_SCHEME),
+        SCHEME_ECDSA_KECCAK256
     );
-    assert_eq!(read_u16(&m, 162), SCHEME_ECDSA_KECCAK256);
-    assert_eq!(m[172], 0, "status pending");
+    assert_eq!(m[VOUCHER_STATUS], 0, "status pending");
 
     // Ledger: authorized supply moves at authorization time.
     assert_eq!(
@@ -838,7 +858,7 @@ fn ethereum_mint_creates_ika_message_approval() {
         &digest
     );
     assert_eq!(
-        &d[lo + leg::MESSAGE_APPROVAL..lo + leg::MESSAGE_APPROVAL + 32],
+        &d[lo + leg::SIGNATURE_VOUCHER..lo + leg::SIGNATURE_VOUCHER + 32],
         ma.as_array()
     );
 
@@ -913,7 +933,7 @@ fn move_ethereum_to_sui_two_legs() {
         chain::ENCODING_EIP712,
     );
     ctx.send(&[ix], &[&ex]).unwrap();
-    assert_eq!(ctx.data(&ma0)[0], 14);
+    assert_eq!(ctx.data(&ma0)[0], DISC_SIGNATURE_VOUCHER);
     assert_eq!(
         ctx.totals(),
         (
@@ -953,8 +973,11 @@ fn move_ethereum_to_sui_two_legs() {
     );
     ctx.send(&[ix], &[&ex]).unwrap();
     let m = ctx.data(&ma1);
-    assert_eq!(&m[34..66], &digest1);
-    assert_eq!(read_u16(&m, 162), SCHEME_EDDSA_SHA512);
+    assert_eq!(
+        &m[VOUCHER_MESSAGE_DIGEST..VOUCHER_MESSAGE_DIGEST + 32],
+        &digest1
+    );
+    assert_eq!(read_u16(&m, VOUCHER_SIGNATURE_SCHEME), SCHEME_EDDSA_SHA512);
     assert_eq!(
         ctx.totals(),
         (
@@ -1232,6 +1255,126 @@ fn solana_leg_rejects_wrong_token_account() {
     let ix = ctx.execute_solana_ix(0, 0, CHAIN_SOLANA, &other);
     let ex = ctx.executor();
     ctx.expect_err(&[ix], &[&ex], LedgerError::AccountMismatch);
+}
+
+/// An approved 1 TBILL mint on Ethereum, ready to execute. Returns the dWallet tuple.
+fn approved_eth_mint(ctx: &mut Ctx) -> (Address, u16, Vec<u8>, u16) {
+    ctx.setup_demo();
+    let p = ctx.approver(0);
+    let ix = ctx.create_intent_ix(
+        0,
+        intent::KIND_MINT,
+        ONE,
+        0,
+        CHAIN_ETHEREUM,
+        &ETH_TREASURY,
+        &[],
+        &p.pubkey(),
+    );
+    ctx.send(&[ix], &[&p]).unwrap();
+    ctx.approve_by(0, &[1, 2]);
+    let t = ctx.time();
+    ctx.set_time(t + 6);
+    ctx.eth_dwallet.clone()
+}
+
+fn eth_mint_ix(ctx: &Ctx, dw: &(Address, u16, Vec<u8>, u16)) -> (Instruction, Address) {
+    let (ix, voucher, _) = ctx.execute_foreign_ix(
+        0,
+        0,
+        CHAIN_ETHEREUM,
+        dw,
+        leg::ACTION_MINT,
+        ONE,
+        &ETH_TREASURY,
+        chain::ENCODING_EIP712,
+    );
+    (ix, voucher)
+}
+
+#[test]
+fn voucher_must_be_the_legs_pda_at_its_canonical_bump() {
+    let mut ctx = Ctx::new();
+    let dw = approved_eth_mint(&mut ctx);
+    let ex = ctx.executor();
+
+    // A voucher at an address the sender picked is refused.
+    let (mut ix, _) = eth_mint_ix(&ctx, &dw);
+    let stray = Keypair::new();
+    ix.accounts[8] = AccountMeta::new(stray.pubkey(), true);
+    ctx.expect_err(&[ix], &[&ex, &stray], LedgerError::InvalidVoucher);
+
+    // Another leg's voucher PDA is refused.
+    let (mut ix, _) = eth_mint_ix(&ctx, &dw);
+    ix.accounts[8] = AccountMeta::new(ctx.voucher_pda(0, 1).0, false);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::InvalidVoucher);
+
+    // The right address with a bump that is not the canonical one is refused.
+    let (mut ix, _) = eth_mint_ix(&ctx, &dw);
+    ix.data[2] = ix.data[2].wrapping_sub(1);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::InvalidVoucher);
+
+    // Nothing moved, and the leg is still pending.
+    let d = ctx.data(&ctx.intent_pda(0).0);
+    assert_eq!(d[leg_offset(0) + leg::STATUS], leg::STATUS_PENDING);
+
+    // The real voucher works once, and the leg cannot be executed again.
+    let (ix, voucher) = eth_mint_ix(&ctx, &dw);
+    ctx.send(&[ix], &[&ex]).unwrap();
+    assert_eq!(ctx.data(&voucher)[0], DISC_SIGNATURE_VOUCHER);
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::InvalidStatus);
+}
+
+#[test]
+fn dwallet_must_be_the_chains_and_owned_by_the_ledger() {
+    let mut ctx = Ctx::new();
+    let dw = approved_eth_mint(&mut ctx);
+    let ex = ctx.executor();
+    let original = ctx.svm.get_account(&dw.0).unwrap();
+
+    // The other dWallet the ledger holds is not this chain's.
+    let (mut ix, _) = eth_mint_ix(&ctx, &dw);
+    ix.accounts[9] = AccountMeta::new_readonly(ctx.sui_dwallet.0, false);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::AccountMismatch);
+
+    // A dWallet that left the ledger (owner is no longer the CPI authority).
+    let mut moved = original.clone();
+    moved.data[2..34].copy_from_slice(Address::new_unique().as_array());
+    ctx.svm.set_account(dw.0, moved).unwrap();
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::DWalletNotOwned);
+
+    // A dWallet that is not active.
+    let mut inactive = original.clone();
+    inactive.data[36] = 3;
+    ctx.svm.set_account(dw.0, inactive).unwrap();
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::InvalidDWallet);
+
+    // An account at the same address that the Ika program does not own.
+    let mut foreign = original.clone();
+    foreign.owner = Address::new_unique();
+    ctx.svm.set_account(dw.0, foreign).unwrap();
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::InvalidDWallet);
+
+    // A dWallet whose public key is not the one the chain registered.
+    let mut other_key = original.clone();
+    other_key.data[40] ^= 0xFF;
+    ctx.svm.set_account(dw.0, other_key).unwrap();
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.expect_err(&[ix], &[&ex], LedgerError::DWalletMismatch);
+
+    // A program that only claims to be Ika is never called.
+    ctx.svm.set_account(dw.0, original).unwrap();
+    let (mut ix, _) = eth_mint_ix(&ctx, &dw);
+    ix.accounts[6] = AccountMeta::new_readonly(TOKEN_2022, false);
+    let err = ctx.send(&[ix], &[&ex]).unwrap_err();
+    assert!(err.contains("IncorrectProgramId"), "{err}");
+
+    let (ix, _) = eth_mint_ix(&ctx, &dw);
+    ctx.send(&[ix], &[&ex]).unwrap();
 }
 
 #[test]

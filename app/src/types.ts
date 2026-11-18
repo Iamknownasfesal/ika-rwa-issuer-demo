@@ -78,10 +78,10 @@ export interface Leg {
 
 export interface LegExecution {
   status: LegExecStatus;
-  /** Solana tx that ran `execute_leg` (policy approval + Ika `approve_message`). */
+  /** Solana tx that ran `execute_leg` (policy approval + the Ika signature voucher). */
   policyTxHash?: string;
-  /** Ika MessageApproval PDA (foreign legs). */
-  messageApproval?: string;
+  /** The leg's Ika signature voucher (foreign legs). */
+  signatureVoucher?: string;
   /** keccak256 of the signed authorization message. */
   messageDigest?: string;
   ikaSignatureId?: string;

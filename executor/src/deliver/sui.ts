@@ -8,9 +8,9 @@
  * Deployed ids are read from `deployments/sui.json` (written by `pnpm deploy:sui`).
  */
 import { toHex, type Authorization } from '@ika-rwa/ledger-sdk';
-import { SuiClient } from '@mysten/sui/client';
+import { SuiGrpcClient } from '@mysten/sui/grpc';
 import { Ed25519Keypair } from '@mysten/sui/keypairs/ed25519';
-import { Transaction } from '@mysten/sui/transactions';
+import { Transaction, coinWithBalance } from '@mysten/sui/transactions';
 import bs58 from 'bs58';
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
@@ -35,30 +35,18 @@ export interface SuiDeployment {
   explorer: string;
 }
 
-/**
- * Public Sui fullnodes retired JSON-RPC (fullnode.testnet.sui.io answers "Method not found");
- * these third-party providers still serve it. `SUI_RPC_URL` overrides; otherwise the first
- * responding endpoint is used. (Follow-up: migrate to @mysten/sui 2.x gRPC.)
- */
-export const SUI_TESTNET_JSON_RPC = [
-  'https://sui-testnet-rpc.publicnode.com',
-  'https://rpc-testnet.suiscan.xyz:443',
-  'https://sui-testnet-endpoint.blockvision.org',
-  'https://testnet.suiet.app',
-];
+/** Sui testnet full node, gRPC. Public full nodes no longer serve JSON-RPC. `SUI_RPC_URL` overrides. */
+export const SUI_TESTNET_GRPC = 'https://fullnode.testnet.sui.io:443';
 
-export async function pickSuiRpc(preferred?: string): Promise<string> {
-  const candidates = [process.env.SUI_RPC_URL, preferred, ...SUI_TESTNET_JSON_RPC].filter((u): u is string => !!u);
-  for (const url of candidates) {
-    try {
-      const c = new SuiClient({ url });
-      await c.getLatestCheckpointSequenceNumber();
-      return url;
-    } catch {
-      /* try next */
-    }
-  }
-  throw new Error(`no Sui testnet JSON-RPC endpoint reachable (tried ${candidates.join(', ')})`);
+/** A gRPC client of Sui testnet: `SUI_RPC_URL`, else `preferred` when it is a gRPC endpoint, else the public full node. */
+export function suiClient(preferred?: string): SuiGrpcClient {
+  return new SuiGrpcClient({ network: 'testnet', baseUrl: suiRpcUrl(preferred) });
+}
+
+export function suiRpcUrl(preferred?: string): string {
+  // Deployment files written before the gRPC migration name JSON-RPC providers that are gone.
+  const usable = preferred && !/publicnode|suiscan|blockvision|suiet/.test(preferred) ? preferred : undefined;
+  return process.env.SUI_RPC_URL ?? usable ?? SUI_TESTNET_GRPC;
 }
 
 export const SUI_DEPLOYMENT_FILE = 'deployments/sui.json';
@@ -92,25 +80,38 @@ export interface SuiDeliverArgs {
   rpcUrl?: string;
 }
 
+/** Whether the controller already consumed `nonce`, asked of the Move module itself (`tbill::nonce_used`). */
+async function suiNonceUsed(client: SuiGrpcClient, dep: SuiDeployment, nonce: bigint, sender: string): Promise<boolean> {
+  const tx = new Transaction();
+  tx.setSender(sender);
+  tx.moveCall({ target: `${dep.packageId}::tbill::nonce_used`, arguments: [tx.object(dep.controllerId), tx.pure.u64(nonce)] });
+  const res = await client.simulateTransaction({ transaction: tx, include: { commandResults: true } });
+  const value = res.commandResults?.[0]?.returnValues[0]?.bcs;
+  if (!value) throw new Error(`could not read tbill::nonce_used(${nonce}) on Sui`);
+  return value[0] === 1;
+}
+
 /** Digest of the transaction whose `Authorized` event carries `nonce`, if this package emitted one. */
-async function findSuiDelivery(client: SuiClient, dep: SuiDeployment, nonce: bigint): Promise<string | null> {
-  let cursor: Parameters<SuiClient['queryEvents']>[0]['cursor'] = null;
-  for (let page = 0; page < 20; page++) {
-    const res = await client.queryEvents({ query: { MoveEventType: `${dep.packageId}::tbill::Authorized` }, cursor, limit: 50, order: 'descending' });
-    const hit = res.data.find((e) => BigInt((e.parsedJson as { nonce: string }).nonce) === nonce);
-    if (hit) return hit.id.txDigest;
-    if (!res.hasNextPage) return null;
-    cursor = res.nextCursor ?? null;
+async function findSuiDelivery(client: SuiGrpcClient, dep: SuiDeployment, nonce: bigint): Promise<string | null> {
+  let before: string | undefined;
+  // A filtered gRPC page can be short, even empty, with more to read: follow `hasNextPage`.
+  for (let page = 0; page < 200; page++) {
+    const res = await client.listEvents({ filter: { eventType: `${dep.packageId}::tbill::Authorized` }, limit: 50, ...(before ? { before } : { order: 'descending' as const }) });
+    const hit = res.events.find((e) => e.json !== null && BigInt(String((e.json as { nonce: string | number }).nonce)) === nonce);
+    if (hit) return hit.transactionDigest;
+    if (!res.hasNextPage || !res.endCursor) return null;
+    before = res.endCursor;
   }
   return null;
 }
 
 export async function deliverSui({ auth, message, signature, suiDeployment: dep, relayerKey, rpcUrl }: SuiDeliverArgs): Promise<Delivery> {
-  const client = new SuiClient({ url: await pickSuiRpc(rpcUrl ?? dep.rpcUrl) });
+  const client = suiClient(rpcUrl ?? dep.rpcUrl);
   const relayer = relayerKey.toSuiAddress();
   // Idempotent: a run that timed out after its transaction landed must not deliver twice.
-  const prior = await findSuiDelivery(client, dep, auth.nonce);
-  if (prior) {
+  if (await suiNonceUsed(client, dep, auth.nonce, relayer)) {
+    const prior = await findSuiDelivery(client, dep, auth.nonce);
+    if (!prior) throw new Error(`Sui already consumed nonce ${auth.nonce}, but its transaction was not found among the package's events`);
     return {
       txHash: prior,
       txHashBytes: bs58.decode(prior),
@@ -130,34 +131,32 @@ export async function deliverSui({ auth, message, signature, suiDeployment: dep,
     // Burn: the module requires `account == sender` and a coin of exactly `amount`.
     const account = `0x${toHex(auth.account)}`;
     if (account !== relayer) throw new Error(`burn source ${account} is not the relayer ${relayer}; the relayer must hold the coins it burns`);
-    const coins = await client.getCoins({ owner: relayer, coinType: dep.coinType });
-    const total = coins.data.reduce((s, c) => s + BigInt(c.balance), 0n);
-    if (coins.data.length === 0 || total < auth.amount) throw new Error(`relayer holds ${total} base units of TBILL, needs ${auth.amount}`);
-    const primary = tx.object(coins.data[0].coinObjectId);
-    if (coins.data.length > 1) tx.mergeCoins(primary, coins.data.slice(1).map((c) => tx.object(c.coinObjectId)));
-    const [exact] = tx.splitCoins(primary, [tx.pure.u64(auth.amount)]);
+    const { balance } = await client.getBalance({ owner: relayer, coinType: dep.coinType });
+    if (BigInt(balance.balance) < auth.amount) throw new Error(`relayer holds ${balance.balance} base units of TBILL, needs ${auth.amount}`);
+    // A coin of exactly `amount`, merged and split from the relayer's coins when the transaction is built.
+    const exact = coinWithBalance({ type: dep.coinType, balance: auth.amount });
     tx.moveCall({
       target: `${dep.packageId}::tbill::burn_with_authorization`,
       arguments: [tx.object(dep.controllerId), tx.pure.vector('u8', Array.from(message)), tx.pure.vector('u8', Array.from(signature)), exact],
     });
   }
 
-  const res = await client.signAndExecuteTransaction({ signer: relayerKey, transaction: tx, options: { showEffects: true, showEvents: true } });
-  if (res.effects?.status.status !== 'success') {
-    throw new Error(`Sui transaction ${res.digest} failed: ${res.effects?.status.error ?? 'unknown error'}`);
+  const res = await client.signAndExecuteTransaction({ signer: relayerKey, transaction: tx, include: { effects: true } });
+  const executed = res.Transaction ?? res.FailedTransaction;
+  if (!executed.status.success) {
+    throw new Error(`Sui transaction ${executed.digest} failed: ${JSON.stringify(executed.status.error)}`);
   }
-  await client.waitForTransaction({ digest: res.digest });
+  await client.waitForTransaction({ digest: executed.digest });
   return {
-    txHash: res.digest,
-    txHashBytes: bs58.decode(res.digest),
-    explorer: suiExplorerTx(res.digest, dep.network),
+    txHash: executed.digest,
+    txHashBytes: bs58.decode(executed.digest),
+    explorer: suiExplorerTx(executed.digest, dep.network),
     note: `${auth.action === 0 ? 'minted' : 'burned'} ${auth.amount} base units on Sui ${dep.network} via ${dep.packageId.slice(0, 10)}…::tbill (relayer ${relayer.slice(0, 10)}…)`,
   };
 }
 
 /** TBILL balance of `owner` on Sui (base units). */
 export async function suiBalanceOf(dep: SuiDeployment, owner: Uint8Array, rpcUrl?: string): Promise<bigint> {
-  const client = new SuiClient({ url: await pickSuiRpc(rpcUrl ?? dep.rpcUrl) });
-  const b = await client.getBalance({ owner: `0x${toHex(owner)}`, coinType: dep.coinType });
-  return BigInt(b.totalBalance);
+  const { balance } = await suiClient(rpcUrl ?? dep.rpcUrl).getBalance({ owner: `0x${toHex(owner)}`, coinType: dep.coinType });
+  return BigInt(balance.balance);
 }

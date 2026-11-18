@@ -147,11 +147,15 @@ export default function SetupPage() {
         <Group title="Trust model">
           <div className="space-y-2 px-4 py-3 leading-relaxed text-fg-muted">
             <p>
-              Each dWallet key is split between the issuer and the Ika network. The network signs only what this program approves through its CPI authority. In
-              production the issuer keeps its share in an HSM, with a custodian backup; the Ika pre-alpha uses placeholder values for it.
+              Each dWallet key is split between the issuer and the Ika network. The network signs only under a signature voucher, and only this program can
+              issue one, through its CPI authority, for a leg that passed the policy. The voucher names the issuer&apos;s request key as the only key the
+              network takes the sign request from. In production the issuer keeps its share in an HSM, with a custodian backup.
             </p>
             <p>A stolen operator key cannot mint without passing policy. A compromised program cannot mint without the issuer&apos;s share.</p>
-            <p>The Ika Solana pre-alpha signs with a single mock signer, not real MPC. The control flow is the same.</p>
+            <p>
+              The Ika Solana devnet pre-alpha is a mock network: one backend holds each dWallet&apos;s whole key and signs alone, with no MPC. The program,
+              the vouchers and the transactions are the real ones, so this shows the control flow, not the production security.
+            </p>
           </div>
         </Group>
       </div>

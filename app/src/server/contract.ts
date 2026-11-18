@@ -22,7 +22,7 @@ export interface SdkAsset {
   timelockSecs: bigint;
   bump: number;
   mintAuthorityBump: number;
-  ikaProgram: Address;
+  ikaSigningKey: Uint8Array;
 }
 export interface SdkChain {
   address: Address;
@@ -46,7 +46,7 @@ export interface SdkLeg {
   chainId: number;
   status: 0 | 1 | 2;
   messageDigest: Uint8Array;
-  messageApproval: Address | null;
+  signatureVoucher: Address | null;
   destTx: Uint8Array;
   executedAt: bigint;
   confirmedAt: bigint;
@@ -110,20 +110,13 @@ export interface ExecutorStepEvent {
   detail?: string;
   txHash?: string;
   signature?: string;
-  messageApproval?: string;
+  signatureVoucher?: string;
 }
-export interface ExecutorConfig {
-  rpcUrl: string;
-  wsUrl: string;
-  grpcUrl: string;
-  programId: string;
-  ikaProgram: string;
-  asset: string;
-  executorKeypair: unknown;
-  deliver: "mock" | "live";
-  evm?: { rpcUrl: string; mintController: string; privateKey: string };
-}
+/** Built by the executor from the deployment, the executor key and the issuer's Ika secrets. */
+export type ExecutorConfig = { readonly __executorConfig: unique symbol };
 export interface ExecutorSdk {
+  /** Reads the issuer's Ika secrets from `LEDGER_IKA_ISSUER` or `keys/ika-issuer.json`. */
+  configFromDeployment(d: Deployment, executorKeypair: unknown, deliver: "mock" | "live"): Promise<ExecutorConfig>;
   runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex: number): AsyncGenerator<ExecutorStepEvent>;
 }
 
@@ -133,6 +126,10 @@ export interface Deployment {
   rpcUrl: string;
   wsUrl?: string;
   grpcUrl: string;
+  ikaNetworkKey: string;
+  ikaChainNumber: number;
+  ikaNetworkValue: number;
+  ikaSigningKey: string;
   createKey: string;
   asset: string;
   mintAuthority: string;

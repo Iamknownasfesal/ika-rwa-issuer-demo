@@ -21,7 +21,8 @@ export interface Asset {
   timelockSecs: bigint;
   bump: number;
   mintAuthorityBump: number;
-  ikaProgram: Address;
+  /** The issuer's Ika request key: the signing key of every voucher this asset issues. */
+  ikaSigningKey: Uint8Array;
 }
 
 export interface ChainDeployment {
@@ -60,8 +61,8 @@ export interface Leg {
   chainId: number;
   status: LegStatus;
   messageDigest: Uint8Array;
-  /** Ika MessageApproval PDA, or null for a Solana-native leg. */
-  messageApproval: Address | null;
+  /** The leg's Ika signature voucher, or null for a Solana-native leg or a leg not executed yet. */
+  signatureVoucher: Address | null;
   destTx: Uint8Array;
   executedAt: bigint;
   confirmedAt: bigint;
@@ -88,17 +89,25 @@ export interface Intent {
   bump: number;
 }
 
-export interface MessageApproval {
+/** `SignatureVoucher.status`. */
+export const VoucherStatus = { Pending: 0, Signed: 1, ClosedByCharge: 2, Revoked: 3 } as const;
+
+/** An Ika signature voucher: the right to one signature of one message with one dWallet. */
+export interface SignatureVoucher {
   address: Address;
   dwallet: Address;
+  /** keccak256 of the message. */
   messageDigest: Uint8Array;
   messageMetadataDigest: Uint8Array;
-  approver: Address;
-  userPubkey: Address;
+  /** Who controls the voucher: the ledger's CPI authority. */
+  owner: Address;
   scheme: number;
-  epoch: bigint;
-  /** 0 pending, 1 signed */
-  status: 0 | 1;
+  /** The Ed25519 request key a sign request must come from, or null while none is set. */
+  signingKey: Uint8Array | null;
+  issuedEpoch: bigint;
+  /** 0 pending, 1 signed, 2 closed by a charge, 3 revoked */
+  status: 0 | 1 | 2 | 3;
+  /** Empty until the network commits it. ECDSA: 65 bytes, the recovery byte then r and s. */
   signature: Uint8Array;
 }
 

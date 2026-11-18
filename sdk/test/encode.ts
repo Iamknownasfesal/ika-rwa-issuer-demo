@@ -25,7 +25,7 @@ export function encodeAsset(a: Omit<Asset, 'address'>): Uint8Array {
   a.approvers.forEach((p, i) => d.set(a32(p), ASSET.APPROVERS + i * 32));
   d[ASSET.BUMP] = a.bump;
   d[ASSET.MINT_AUTHORITY_BUMP] = a.mintAuthorityBump;
-  d.set(a32(a.ikaProgram), ASSET.IKA_PROGRAM);
+  d.set(a.ikaSigningKey, ASSET.IKA_SIGNING_KEY);
   return d;
 }
 
@@ -79,7 +79,7 @@ export function encodeIntent(x: Omit<Intent, 'address'>): Uint8Array {
     writeU16(d, o + LEG.CHAIN_ID, l.chainId);
     d[o + LEG.STATUS] = l.status;
     d.set(l.messageDigest, o + LEG.MESSAGE_DIGEST);
-    if (l.messageApproval) d.set(a32(l.messageApproval), o + LEG.MESSAGE_APPROVAL);
+    if (l.signatureVoucher) d.set(a32(l.signatureVoucher), o + LEG.SIGNATURE_VOUCHER);
     d.set(padAddr(l.destTx), o + LEG.DEST_TX);
     writeI64(d, o + LEG.EXECUTED_AT, l.executedAt);
     writeI64(d, o + LEG.CONFIRMED_AT, l.confirmedAt);

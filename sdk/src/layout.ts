@@ -29,7 +29,7 @@ export const ASSET = {
   APPROVERS: 142,
   BUMP: 302,
   MINT_AUTHORITY_BUMP: 303,
-  IKA_PROGRAM: 304,
+  IKA_SIGNING_KEY: 304,
   LEN: 352,
 } as const;
 
@@ -80,40 +80,40 @@ export const LEG = {
   CHAIN_ID: 1,
   STATUS: 3,
   MESSAGE_DIGEST: 4,
-  MESSAGE_APPROVAL: 36,
+  SIGNATURE_VOUCHER: 36,
   DEST_TX: 68,
   EXECUTED_AT: 133,
   CONFIRMED_AT: 141,
   LEN: 149,
 } as const;
 
-/** Ika MessageApproval (disc 14, 312 bytes). */
-export const MESSAGE_APPROVAL = {
-  DISC: 14,
+/** Ika SignatureVoucher (tag 108, 304 bytes). */
+export const SIGNATURE_VOUCHER = {
+  DISC: 108,
   DWALLET: 2,
   MESSAGE_DIGEST: 34,
   MESSAGE_METADATA_DIGEST: 66,
-  APPROVER: 98,
-  USER_PUBKEY: 130,
-  SIGNATURE_SCHEME: 162,
-  EPOCH: 164,
-  STATUS: 172,
-  SIGNATURE_LEN: 173,
-  SIGNATURE: 175,
-  BUMP: 303,
-  LEN: 312,
+  OWNER: 98,
+  SIGNATURE_SCHEME: 130,
+  HAS_SIGNING_KEY: 132,
+  SIGNING_KEY: 133,
+  ISSUED_EPOCH: 165,
+  STATUS: 173,
+  SIGNATURE_LEN: 174,
+  SIGNATURE: 176,
+  LEN: 304,
 } as const;
 
-/** Ika DWallet (disc 2, 153 bytes). */
+/** Ika DWallet (tag 97, 185 bytes). */
 export const DWALLET = {
-  DISC: 2,
-  AUTHORITY: 2,
+  DISC: 97,
+  OWNER: 2,
   CURVE: 34,
   STATE: 36,
   PUBLIC_KEY_LEN: 37,
   PUBLIC_KEY: 38,
   BUMP: 144,
-  LEN: 153,
+  LEN: 185,
 } as const;
 
 // ── byte helpers ──

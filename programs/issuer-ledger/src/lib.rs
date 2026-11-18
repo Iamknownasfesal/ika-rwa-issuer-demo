@@ -11,11 +11,11 @@
 //!
 //! | disc | name            | effect |
 //! |------|-----------------|--------|
-//! | 0    | `InitAsset`     | create the Asset PDA (caps, approvers, threshold, timelock, executor, Ika program) |
+//! | 0    | `InitAsset`     | create the Asset PDA (caps, approvers, threshold, timelock, executor, Ika signing key) |
 //! | 1    | `AddChain`      | register a ChainDeployment (dWallet, contract, cap, allowlist, seed supply) |
 //! | 2    | `CreateIntent`  | run policy rules; create an Intent PDA (mint / burn / move) |
 //! | 3    | `ApproveIntent` | approver signs; distinct, not proposer; sets `approved_at` at threshold |
-//! | 4    | `ExecuteLeg`    | threshold + timelock; Solana leg → Token-2022 CPI; foreign leg → Ika `approve_message` CPI |
+//! | 4    | `ExecuteLeg`    | threshold + timelock; Solana leg → Token-2022 CPI; foreign leg → Ika `issue_signature_voucher` CPI |
 //! | 5    | `ConfirmLeg`    | executor records the destination tx hash; gates the second leg of a move |
 //!
 //! Account layouts live in [`state`], error codes in [`error`], the signed

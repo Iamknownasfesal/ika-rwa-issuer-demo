@@ -4,39 +4,41 @@
  * Runs one leg of an approved intent end-to-end:
  *
  *   1. `execute_leg` on Solana: the ledger re-checks caps, then either mints /
- *      burns Token-2022 (Solana leg) or CPIs Ika `approve_message` (foreign leg).
- *   2. For foreign legs: wait for the `MessageApproval` PDA, ask the Ika
- *      network for a presign + signature over the authorization message,
- *      wait for the network to commit the signature on-chain.
- *   3. Deliver the signed authorization to the destination chain (mock or EVM).
+ *      burns Token-2022 (Solana leg) or CPIs Ika `issue_signature_voucher`
+ *      (foreign leg). The voucher sits at the ledger's PDA for the leg.
+ *   2. For foreign legs: wait until the voucher is finalized, then ask the Ika
+ *      network to sign the authorization message under it. The network reads
+ *      the voucher on Solana itself and writes the signature into it.
+ *   3. Deliver the signed authorization to the destination chain.
  *   4. `confirm_leg` with the destination tx hash.
  *
- * Trust model: the dWallets are zero-trust: the encrypted user share is held
- * by the issuer (this executor's key in the demo; an HSM / custodian backup
- * in production) and the network share only signs after the Solana policy
- * program approved the exact message digest. The executor cannot originate a
- * mint on its own: without a `MessageApproval` created by the program's CPI
- * authority, the network refuses to sign.
+ * Trust model: the dWallets are zero-trust: the issuer holds the encrypted
+ * user share (this executor in the demo; an HSM / custodian backup in
+ * production) and the network signs only under a voucher the Solana policy
+ * program issued for the exact message digest. The executor cannot originate
+ * a mint on its own: the ledger's CPI authority owns the dWallets, so only
+ * the ledger can issue a voucher, and it names the issuer's request key as
+ * the only key the network accepts the sign request from.
  */
 import {
-  LegKind, LegStatus, MESSAGE_APPROVAL, authorizationMessage, chainById, decodeMessageApproval, fetchAsset, fetchChains, fetchIntents,
-  findChainPda, findCpiAuthorityPda, findCoordinatorPda, findIntentPda, findMessageApprovalPda, findMintAuthorityPda, formatAmount,
-  keccak256, legNonce, presignAlgorithmForCurve, toHex,
+  LegKind, LegStatus, VoucherStatus, authorizationMessage, chainById, decodeSignatureVoucher, fetchAsset, fetchChains, fetchIntents,
+  findChainPda, findCpiAuthorityPda, findCoordinatorPda, findIntentPda, findMintAuthorityPda, findSignatureVoucherPda, formatAmount,
+  keccak256, legNonce, toHex, IkaCurve,
   buildConfirmLegIx, buildExecuteLegForeignIx, buildExecuteLegSolanaIx, bytesEqual,
-  type Address, type Authorization, type ChainDeployment, type Intent,
+  type Address, type Authorization, type ChainDeployment, type Intent, type SignatureVoucher,
 } from '@ika-rwa/ledger-sdk';
-import { createIkaClient, describeGrpcError, fetchDWalletAttestation } from '@ika-rwa/ledger-sdk/ika';
+import { compactSignature, connectIka, issuerKeys, sdkScheme } from '@ika-rwa/ledger-sdk/ika';
 import { explainError, extractLedgerErrorCode } from '@ika-rwa/ledger-sdk';
-import { getAddressDecoder, getAddressEncoder } from '@solana/kit';
+import { getAddressDecoder, getAddressEncoder, getBase64Encoder } from '@solana/kit';
 import { deliverEvm, evmBalanceOf, loadEvmDeployments } from './deliver/evm.js';
 import { deliverSui, loadSuiDeployment, loadSuiKeypair, suiBalanceOf } from './deliver/sui.js';
 import { mockDeliver, type Delivery } from './deliver/mock.js';
-import bs58 from 'bs58';
-import { createClient, explorerAddress, explorerTx, pollAccount, sendInstructions } from './solana.js';
-import type { ExecutorConfig } from './config.js';
+import { createClient, explorerAddress, explorerTx, sendInstructions, type SolanaRpc } from './solana.js';
+import type { DWalletName, ExecutorConfig } from './config.js';
 
 export * from './config.js';
 export * from './solana.js';
+export * from './ika.js';
 export { mockDeliver } from './deliver/mock.js';
 export type { Delivery } from './deliver/mock.js';
 
@@ -51,7 +53,8 @@ export interface StepEvent {
   txHash?: string;
   explorer?: string;
   signature?: string;
-  messageApproval?: string;
+  /** The leg's Ika signature voucher. */
+  signatureVoucher?: string;
 }
 
 /** Human-readable Solana error: message + ledger error code (if any) + last program log lines. */
@@ -79,6 +82,30 @@ async function loadLeg(cfg: ExecutorConfig, rpc: ReturnType<typeof createClient>
   const [chain] = await fetchChains(rpc, cfg.programId, cfg.asset, [leg.chainId]);
   if (!chain) throw new Error(`chain ${leg.chainId} not registered`);
   return { asset, intent, leg, chain };
+}
+
+/** Message of an Ika or RPC error, with the cause the SDK attaches when it has one. */
+export function describeIkaError(e: unknown): string {
+  const err = e as { message?: string; cause?: { message?: string } };
+  const message = String(err?.message ?? e);
+  return err?.cause?.message && !message.includes(err.cause.message) ? `${message}: ${err.cause.message}` : message;
+}
+
+/**
+ * Read a signature voucher at finalized commitment until `check` accepts it. Finalized, because
+ * the network reads the voucher at finalized: a sign request sent earlier is refused.
+ */
+async function pollVoucher(rpc: SolanaRpc, address: Address, check: (v: SignatureVoucher) => boolean, timeoutMs: number): Promise<SignatureVoucher> {
+  const start = Date.now();
+  while (Date.now() - start < timeoutMs) {
+    const { value } = await rpc.getAccountInfo(address, { encoding: 'base64', commitment: 'finalized' }).send();
+    if (value) {
+      const voucher = decodeSignatureVoucher(address, Uint8Array.from(getBase64Encoder().encode(value.data[0])));
+      if (check(voucher)) return voucher;
+    }
+    await new Promise((r) => setTimeout(r, 1_500));
+  }
+  throw new Error(`timeout waiting for the signature voucher ${address}`);
 }
 
 export function authorizationFor(assetAddr: Address, intent: Intent, legIndex: number, chain: ChainDeployment): Authorization {
@@ -140,12 +167,14 @@ export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex
   const auth = authorizationFor(cfg.asset, intent, legIndex, chain);
   const message = authorizationMessage(chain.encoding, auth);
   const digest = keccak256(message);
-  const [messageApproval, maBump] = await findMessageApprovalPda(cfg.ikaProgram, chain.curve, chain.dwalletPubkey, chain.signatureScheme, digest);
-  const [coordinator] = await findCoordinatorPda(cfg.ikaProgram);
+  // The voucher is the ledger's PDA for this leg, so it is found again from the intent alone.
+  const [voucher, voucherBump] = await findSignatureVoucherPda(cfg.programId, intentPda, legIndex);
+  const [coordinator] = await findCoordinatorPda(cfg.ika.programId);
 
   const ix = buildExecuteLegForeignIx({
     programId: cfg.programId, asset: cfg.asset, intent: intentPda, chain: chainPda, authority: executor.address, payer: executor.address,
-    legIndex, messageApprovalBump: maBump, cpiAuthorityBump, ikaProgram: cfg.ikaProgram, coordinator, messageApproval, dwallet: chain.dwallet, cpiAuthority,
+    legIndex, signatureVoucherBump: voucherBump, cpiAuthorityBump, ikaProgram: cfg.ika.programId, coordinator, signatureVoucher: voucher,
+    dwallet: chain.dwallet, cpiAuthority,
   });
   // A burn is only authorized if the destination treasury can actually cover it. The ledger moves
   // supply at authorization time, so check first and leave the ledger untouched if it cannot.
@@ -172,16 +201,12 @@ export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex
     }
   }
 
-  let sent: { signature: string; signatureBytes: Uint8Array; slot: bigint };
+
   if (resuming) {
-    // The ledger already authorized this leg (MessageApproval exists); resume from the signature step
-    // using the transaction that created the MessageApproval as the approval proof.
-    const sigs = await rpc.getSignaturesForAddress(messageApproval, { limit: 20 }).send();
-    const first = sigs[sigs.length - 1];
-    if (!first) throw new Error(`no transaction found for MessageApproval ${messageApproval}`);
-    sent = { signature: first.signature, signatureBytes: bs58.decode(first.signature), slot: first.slot };
-    yield ev(legIndex, 'policy', 'ok', { detail: `already authorized by the ledger (resuming)`, txHash: sent.signature, explorer: explorerTx(sent.signature), messageApproval });
+    // The ledger already authorized this leg and its voucher exists; resume from the signature step.
+    yield ev(legIndex, 'policy', 'ok', { detail: 'already authorized by the ledger (resuming)', signatureVoucher: voucher });
   } else {
+    let sent;
     try {
       sent = await sendInstructions(client, executor, [ix]);
     } catch (e) {
@@ -189,51 +214,73 @@ export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex
       throw e;
     }
     yield ev(legIndex, 'policy', 'ok', {
-      detail: `Ledger approved digest ${toHex(digest).slice(0, 16)}… and CPI'd Ika approve_message via ${cpiAuthority}`,
+      detail: `Ledger approved digest ${toHex(digest).slice(0, 16)}… and issued an Ika signature voucher through ${cpiAuthority}`,
       txHash: sent.signature,
       explorer: explorerTx(sent.signature),
-      messageApproval,
+      signatureVoucher: voucher,
     });
   }
 
-  // ── 2. Ika MessageApproval + signature ──
-  yield ev(legIndex, 'ika-approval', 'start', { detail: `waiting for MessageApproval ${messageApproval}`, messageApproval });
-  try {
-    const data = await pollAccount(rpc, messageApproval, (d) => d[0] === MESSAGE_APPROVAL.DISC, cfg.timeouts?.messageApproval ?? 30_000);
-    const ma = decodeMessageApproval(messageApproval, data);
-    if (!bytesEqual(ma.messageDigest, digest)) throw new Error('MessageApproval digest mismatch');
-    yield ev(legIndex, 'ika-approval', 'ok', { detail: `MessageApproval pending (dWallet ${chain.dwallet}, scheme ${ma.scheme})`, messageApproval, explorer: explorerAddress(messageApproval) });
-  } catch (e) {
-    yield ev(legIndex, 'ika-approval', 'error', { detail: describeSolanaError(e) });
-    throw e;
-  }
-
-  yield ev(legIndex, 'ika-signature', 'start', { detail: `presign + sign via ${cfg.grpcUrl} (${meta.curve === 0 ? 'secp256k1 ECDSA' : 'ed25519'})` });
+  // ── 2. Ika signature voucher + signature ──
+  const dwalletName: DWalletName = chain.curve === IkaCurve.Secp256k1 ? 'secp256k1' : 'curve25519';
+  const keys = await issuerKeys(cfg.issuer.rootSeed, chain.curve);
+  const { ikaClient, close } = connectIka(rpc, cfg.ika);
   let signature: Uint8Array;
-  const executorPubkey = new Uint8Array(getAddressEncoder().encode(executor.address));
-  const ika = createIkaClient(cfg.grpcUrl, { publicKey: executorPubkey });
   try {
-    // Zero-trust dWallet: the issuer's (encrypted) user share participates here.
-    // In the pre-alpha the user-side MPC inputs are placeholders.
-    const attestation = await fetchDWalletAttestation(rpc, cfg.ikaProgram, chain.curve, chain.dwalletPubkey);
-    // The network resolves the dWallet from the DKG session identifier, so both requests carry it as the session preimage.
-    const session = { sessionPreimage: attestation.sessionIdentifier };
-    const presignId = await ika.requestPresign(chain.curve, presignAlgorithmForCurve(chain.curve), chain.dwalletPubkey, false, session);
-    signature = await ika.requestSign(chain.dwalletPubkey, message, presignId, sent.signatureBytes, sent.slot, attestation, session);
-    // The network also commits the signature on-chain; verify it matches.
+    yield ev(legIndex, 'ika-approval', 'start', { detail: `waiting for the voucher ${voucher} to be finalized on Solana`, signatureVoucher: voucher });
+    let issued: SignatureVoucher;
     try {
-      const signed = await pollAccount(rpc, messageApproval, (d) => d[MESSAGE_APPROVAL.STATUS] === 1, cfg.timeouts?.signature ?? 30_000);
-      const ma = decodeMessageApproval(messageApproval, signed);
-      if (!bytesEqual(ma.signature, signature)) throw new Error('on-chain signature differs from gRPC signature');
-      yield ev(legIndex, 'ika-signature', 'ok', { detail: `signature committed on-chain by the network`, signature: toHex(signature), messageApproval });
+      issued = await pollVoucher(rpc, voucher, () => true, cfg.timeouts?.voucher ?? 120_000);
+      if (!bytesEqual(issued.messageDigest, digest)) throw new Error('the voucher is for another message digest than this leg');
+      if (issued.dwallet !== chain.dwallet) throw new Error('the voucher is for another dWallet than the chain registered');
+      const requestKey = ikaClient.getRequestPublicKey(keys);
+      if (!issued.signingKey || !bytesEqual(issued.signingKey, requestKey)) {
+        throw new Error(`the voucher names another signing key than this executor's Ika request key ${toHex(requestKey)}`);
+      }
+      if (issued.status === VoucherStatus.ClosedByCharge || issued.status === VoucherStatus.Revoked) {
+        throw new Error(`the voucher ended without a signature (status ${issued.status})`);
+      }
+      yield ev(legIndex, 'ika-approval', 'ok', {
+        detail: `Voucher finalized: one ${meta.curve === 0 ? 'secp256k1 ECDSA' : 'Ed25519'} signature of this digest with dWallet ${chain.dwallet}`,
+        signatureVoucher: voucher,
+        explorer: explorerAddress(voucher),
+      });
     } catch (e) {
-      yield ev(legIndex, 'ika-signature', 'ok', { detail: `signature received via gRPC (on-chain commit not observed: ${(e as Error).message})`, signature: toHex(signature), messageApproval });
+      yield ev(legIndex, 'ika-approval', 'error', { detail: describeIkaError(e) });
+      throw e;
     }
-  } catch (e) {
-    yield ev(legIndex, 'ika-signature', 'error', { detail: describeGrpcError(e) });
-    throw e;
+
+    yield ev(legIndex, 'ika-signature', 'start', { detail: `asking the Ika network to sign under the voucher (${cfg.ika.grpcUrl})` });
+    try {
+      const scheme = sdkScheme(chain.signatureScheme);
+      if (issued.status === VoucherStatus.Signed) {
+        // An earlier run got this far: the network already wrote the signature into the voucher.
+        signature = issued.signature;
+        yield ev(legIndex, 'ika-signature', 'ok', { detail: 'signature read from the voucher on Solana (signed in an earlier run)', signature: toHex(signature), signatureVoucher: voucher });
+      } else {
+        const dWallet = cfg.issuer.dwallets[dwalletName];
+        if (!dWallet) throw new Error(`the issuer secrets hold no ${dwalletName} dWallet; run pnpm setup:devnet`);
+        if (!bytesEqual(dWallet.publicKey, chain.dwalletPubkey)) throw new Error(`the issuer's ${dwalletName} dWallet is not the one the chain registered`);
+        // The SDK reads the voucher, takes a presign, sends the request signed by the issuer's
+        // request key and checks the signature against the dWallet's public key before returning it.
+        signature = await ikaClient.requestSign({ dWallet, signatureVoucherId: voucher, message, ...scheme, userShareEncryptionKeys: keys });
+        // The network also writes the signature into the voucher, where anyone can read it.
+        try {
+          const committed = await pollVoucher(rpc, voucher, (v) => v.status === VoucherStatus.Signed, cfg.timeouts?.signature ?? 60_000);
+          if (!bytesEqual(committed.signature, signature)) throw new Error('the signature on Solana differs from the one the network returned');
+          yield ev(legIndex, 'ika-signature', 'ok', { detail: 'signature returned by the network and committed in the voucher on Solana', signature: toHex(signature), signatureVoucher: voucher });
+        } catch (e) {
+          yield ev(legIndex, 'ika-signature', 'ok', { detail: `signature returned by the network (on-chain commit not observed: ${(e as Error).message})`, signature: toHex(signature), signatureVoucher: voucher });
+        }
+      }
+      // Destination contracts verify 64 bytes; an ECDSA signature comes with a leading recovery byte.
+      signature = compactSignature(chain.signatureScheme, signature);
+    } catch (e) {
+      yield ev(legIndex, 'ika-signature', 'error', { detail: describeIkaError(e) });
+      throw e;
+    }
   } finally {
-    ika.close();
+    close();
   }
 
   // ── 3. Deliver to the destination chain ──

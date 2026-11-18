@@ -1,32 +1,78 @@
-# Ika pre-alpha integration notes (verified on devnet, 2026-09-22)
+# Ika devnet pre-alpha integration notes (verified on devnet, 2026-11-18)
 
-What the live signer at `pre-alpha-dev-1.ika.ika-network.net:443` actually expects: several
-points differ from the vendored examples in `dwallet-labs/ika-pre-alpha`.
+How the ledger uses the Ika Solana devnet pre-alpha, and what was checked against the live
+network. The guide is https://solana-pre-alpha.ika.xyz; the SDK, the CPI crates and the examples
+are in https://github.com/dwallet-labs/ika-pre-alpha.
 
-| Step | What works | What does not |
+The pre-alpha is a mock network: one backend holds the whole key of each dWallet and signs alone.
+There is no MPC and it is not secure. The Solana program, the transactions and the SDK's calls and
+checks are the real ones, so an app moves to the real network by dropping mock mode.
+
+| What | Value |
+|---|---|
+| Ika program | `8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv` |
+| Network, gRPC-Web | `https://solana-alpha-dev-1.ika-network.net` |
+| Network key | `fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed` |
+| Chain number, network value | `1`, `3` |
+
+A wipe can move the program and change the network key. Then: update the `ika-dwallet-pinocchio`
+rev in `Cargo.toml` and `IKA_DEVNET_PRE_ALPHA` in `sdk/src/chains.ts`, run
+`scripts/deploy-program.sh`, then `pnpm setup:devnet`, which makes new dWallets and a new asset.
+
+## The flow
+
+| Step | Who | What |
 |---|---|---|
-| Transport | `@grpc/grpc-js` from Node 24 on macOS negotiates HTTP/2 fine | the ALPN failure reported by another team was not reproduced |
-| DKG | `DKG { user_secret_key_share: Encrypted{…} }` (zero-trust) with `intended_chain_sender` = the executor key; dWallet PDA appears within seconds; `TransferOwnership` (disc 24) by that key hands it to the ledger's CPI PDA |: |
-| approve_message | via CPI from the ledger (`execute_leg`), coordinator first, 100-byte data |: |
-| Presign | global `Presign { curve, signature_algorithm }` | `PresignForDWallet` is rejected for DKG dWallets ("requires an imported key dWallet") |
-| Sign | needs the real `dwallet_attestation` and a `session_identifier_preimage` equal to the DKG **session identifier**; `approval_proof = Solana { tx_signature, slot }` of the `execute_leg` transaction; the network then commits the signature on-chain (`MessageApproval.status = 1`) | placeholder attestation → "failed to decode dwallet_attestation"; random preimage → "no key for dwallet <hash>" |
-| Ed25519 | `EddsaSha512` signs the raw 161-byte authorization message |: |
-| secp256k1 | `EcdsaKeccak256` signs `keccak256(message)`; 64-byte `r‖s` returned |: |
+| Register | setup | One root seed gives the issuer's keys. An encryption key is registered per curve (a transaction each), and the request key gets a gas deposit. The mock charges nothing, but the deposit must exist. |
+| DKG | setup | `requestDWalletDKG`, then `acceptEncryptedUserShare`, then `waitForDWallet`. The dWallet is unusable until the share is accepted. The returned `DWallet` (user share included) is kept in `keys/ika-issuer.json`: a sign request needs it. |
+| Rules | setup | `init_asset` stores the request key as `ika_signing_key`; `add_chain` binds each chain to its dWallet's address, curve and public key. |
+| Hand-over | setup | `transferDWallet` to the ledger's CPI authority (`["__ika_cpi_authority"]`), last, once the rules exist. |
+| Voucher | ledger | `execute_leg` CPIs `issue_signature_voucher` (156) through `ika-dwallet-pinocchio`. The voucher is the ledger's PDA `["signature_voucher", intent, leg_index]`, signed for with its seeds; its owner is the CPI authority and its signing key the asset's `ika_signing_key`. |
+| Sign | executor | Once the voucher is finalized, `requestSign({ dWallet, signatureVoucherId, message, ... })`. The SDK takes a presign from the pool, sends the request signed by the request key, and checks the signature against the dWallet's public key. The network writes the signature into the voucher (status 1). |
 
-Reconstructing the attestation without the DKG response (`sdk/src/ika/attestation.ts`):
+## What the ledger checks before the CPI
 
-```
-DWalletAttestation PDA  = ["dwallet", chunks(curve_u16_le ‖ pk), "attestation"]   (disc 15)
-  noa_signature         = bytes 2..66
-  attestation_data      = bytes 67..          (BCS VersionedDWalletDataAttestation; V1 session_identifier = data[1..33])
-DWallet account         = ["dwallet", chunks…]                                    (disc 2)
-  network_pubkey        = bytes 111..143      (noa_public_key)
-  epoch                 = u64 LE at 103       (created_epoch)
-```
+The CPI authority is one address for every dWallet the program holds, so the program decides
+which dWallet a call is for:
 
-`scripts/ika-probe.ts <intentIndex>` replays presign + sign for an authorized leg with several
-preimage candidates and reports which one the signer accepts: useful when the service changes.
+- the Ika program account is the one the build names (`ika_dwallet_pinocchio::ID`; the crate
+  refuses any other too, so the CPI authority's signature never reaches a fake program);
+- the dWallet account is the one the chain registered, owned by the Ika program, tagged 97,
+  185 bytes, active, owned by the CPI authority, with the chain's curve and public key;
+- the voucher account is the leg's PDA at its canonical bump, so a leg has one voucher at an
+  address anyone can derive, and never one where the sender chose.
 
-Operational notes: the signer's key store and the devnet program state are wiped periodically -
-run `pnpm setup:devnet` before a session. The public devnet RPC rate-limits bursts; the executor
-retries with backoff and confirms by polling instead of WebSocket subscriptions.
+Each check has its own error (`InvalidDWallet`, `DWalletNotOwned`, `DWalletMismatch`,
+`InvalidVoucher`) and a LiteSVM test against the real Ika program binary.
+
+## Facts that matter in practice
+
+- **Finalized.** The network reads Solana at finalized commitment. A sign request sent while the
+  voucher is only confirmed is refused, so the executor waits about 15 seconds after `execute_leg`.
+- **Mock mode and gRPC-Web.** The client is built with `withMockCryptography` and a
+  `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/web`. Plain gRPC on port 443 gets HTTP 400.
+- **Signatures.** ECDSA comes back as 65 bytes: the recovery byte, then `r` and `s`. The EVM
+  `MintController` takes the 64-byte `r || s` and tries both recovery ids. Ed25519 is 64 bytes
+  over the raw 161-byte message.
+- **Digest.** A voucher stores `keccak256(message)` whatever the scheme. For EVM chains the message
+  is the EIP-712 preimage `0x1901 || domainSeparator || structHash`, and `EcdsaKeccak256` signs its
+  Keccak-256, which is what `ecrecover` checks.
+- **One request key.** The request key is the same for every curve of a root seed, so one asset
+  names one signing key for both dWallets. `loadIssuer` checks this.
+- **Build.** `cargo build-sbf --tools-version v1.54 --arch v3`; with `-- --features devnet-pre-alpha`
+  for devnet. A build without the feature calls the local test address and refuses every devnet
+  dWallet.
+- **Network transactions are version 1.** The network's `CommitSignature` transaction uses the v1
+  transaction format, so reads need `maxSupportedTransactionVersion: 1`.
+- **Faucet.** The devnet RPC faucet is closed (`requestAirdrop` fails). `setup:devnet` funds the
+  demo keys from the Solana CLI's default wallet.
+- **Resume.** A leg whose voucher is already signed is finished from the voucher: the signature is
+  read from Solana, not requested again.
+
+`pnpm exec tsx scripts/ika-probe.ts [secp256k1|ed25519]` runs registration, DKG, an owner-issued
+voucher and a sign with no ledger involved: when it passes and a leg does not, the fault is in the
+ledger or the executor.
+
+Operational notes: the public devnet RPC rate-limits bursts; the executor retries with backoff and
+confirms by polling instead of WebSocket subscriptions. Sui's public full nodes no longer serve
+JSON-RPC, so Sui delivery uses the gRPC client of `@mysten/sui` 2.x.

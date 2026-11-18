@@ -17,6 +17,8 @@ pub const SEED_ASSET: &[u8] = b"asset";
 pub const SEED_CHAIN: &[u8] = b"chain";
 pub const SEED_INTENT: &[u8] = b"intent";
 pub const SEED_MINT_AUTHORITY: &[u8] = b"mint_authority";
+/// Signature voucher of one leg: `["signature_voucher", intent, leg_index(1)]`.
+pub const SEED_SIGNATURE_VOUCHER: &[u8] = b"signature_voucher";
 
 // ───────────────────────────── discriminators ─────────────────────────────
 pub const DISC_ASSET: u8 = 1;
@@ -30,7 +32,7 @@ pub mod asset {
 
     pub const CREATE_KEY: usize = 2; // [32]
     pub const ADMIN: usize = 34; // [32]
-    pub const EXECUTOR: usize = 66; // [32] off-chain executor (gRPC user_pubkey)
+    pub const EXECUTOR: usize = 66; // [32] off-chain executor (signs execute_leg / confirm_leg)
     pub const SYMBOL: usize = 98; // [8] utf8, zero padded
     pub const DECIMALS: usize = 106; // u8
     pub const THRESHOLD: usize = 107; // u8
@@ -43,7 +45,7 @@ pub mod asset {
     pub const APPROVERS: usize = 142; // [32 * MAX_APPROVERS] = 160
     pub const BUMP: usize = 302; // u8
     pub const MINT_AUTHORITY_BUMP: usize = 303; // u8
-    pub const IKA_PROGRAM: usize = 304; // [32] the Ika dWallet program this ledger trusts
+    pub const IKA_SIGNING_KEY: usize = 304; // [32] Ed25519 request key that may ask Ika to sign a voucher
     pub const RESERVED: usize = 336; // [16]
     pub const LEN: usize = 352;
 }
@@ -58,7 +60,7 @@ pub mod chain {
     pub const ENCODING: usize = 37; // u8: 0 = Raw authorization, 1 = EIP-712
     pub const CURVE: usize = 38; // u16 Ika DWalletCurve
     pub const SIGNATURE_SCHEME: usize = 40; // u16 Ika DWalletSignatureScheme
-    pub const DWALLET: usize = 42; // [32] Ika dWallet PDA (zero for solana-native)
+    pub const DWALLET: usize = 42; // [32] Ika dWallet account (zero for solana-native)
     pub const DWALLET_PUBKEY_LEN: usize = 74; // u8
     pub const DWALLET_PUBKEY: usize = 75; // [65]
     pub const CONTRACT: usize = 140; // ADDR_LEN (mint address on Solana, contract / party elsewhere)
@@ -117,7 +119,7 @@ pub mod leg {
     pub const CHAIN_ID: usize = 1; // u16
     pub const STATUS: usize = 3; // u8: 0 Pending, 1 Authorized, 2 Confirmed
     pub const MESSAGE_DIGEST: usize = 4; // [32] keccak256 of the authorization message
-    pub const MESSAGE_APPROVAL: usize = 36; // [32] Ika MessageApproval PDA (zero for solana)
+    pub const SIGNATURE_VOUCHER: usize = 36; // [32] Ika SignatureVoucher of this leg (zero for solana)
     pub const DEST_TX: usize = 68; // ADDR_LEN destination tx hash / signature
     pub const EXECUTED_AT: usize = 133; // i64
     pub const CONFIRMED_AT: usize = 141; // i64

@@ -32,13 +32,15 @@ export interface InitAssetArgs {
   timelockSecs: bigint;
   globalCap: bigint;
   executor: Address;
-  ikaProgram: Address;
+  /** The issuer's Ika request key (Ed25519, 32 bytes): the only key that may ask Ika to sign a voucher. */
+  ikaSigningKey: Uint8Array;
   mintAuthorityBump: number;
   approvers: Address[];
 }
 
 export function buildInitAssetIx(x: InitAssetArgs): Instruction {
   if (x.createKey.length !== 32) throw new Error('createKey must be 32 bytes');
+  if (x.ikaSigningKey.length !== 32) throw new Error('ikaSigningKey must be 32 bytes');
   const data = concat(
     b(Ix.InitAsset),
     x.createKey,
@@ -47,7 +49,7 @@ export function buildInitAssetIx(x: InitAssetArgs): Instruction {
     u64le(x.timelockSecs),
     u64le(x.globalCap),
     a32(x.executor),
-    a32(x.ikaProgram),
+    x.ikaSigningKey,
     b(x.bump, x.mintAuthorityBump, x.approvers.length),
     ...x.approvers.map(a32),
   );
@@ -66,7 +68,7 @@ export interface AddChainArgs {
   encoding: number;
   curve: number;
   signatureScheme: number;
-  /** Ika dWallet PDA (system program / zero address for a Solana-native chain). */
+  /** Ika dWallet account (system program / zero address for a Solana-native chain). */
   dwallet: Address;
   dwalletPubkey: Uint8Array;
   /** Token-2022 mint on Solana, contract address elsewhere. */
@@ -190,11 +192,12 @@ export interface ExecuteLegForeignArgs {
   authority: Address;
   payer: Address;
   legIndex: number;
-  messageApprovalBump: number;
+  signatureVoucherBump: number;
   cpiAuthorityBump: number;
   ikaProgram: Address;
   coordinator: Address;
-  messageApproval: Address;
+  /** `findSignatureVoucherPda(programId, intent, legIndex)` */
+  signatureVoucher: Address;
   dwallet: Address;
   cpiAuthority: Address;
 }
@@ -204,9 +207,9 @@ export function buildExecuteLegForeignIx(x: ExecuteLegForeignArgs): Instruction 
     programAddress: x.programId,
     accounts: [
       w(x.asset), w(x.intent), w(x.chain), rs(x.authority), ws(x.payer), ro(SYSTEM_PROGRAM),
-      ro(x.ikaProgram), ro(x.coordinator), w(x.messageApproval), ro(x.dwallet), ro(x.programId), ro(x.cpiAuthority),
+      ro(x.ikaProgram), ro(x.coordinator), w(x.signatureVoucher), ro(x.dwallet), ro(x.programId), ro(x.cpiAuthority),
     ],
-    data: b(Ix.ExecuteLeg, x.legIndex, x.messageApprovalBump, x.cpiAuthorityBump),
+    data: b(Ix.ExecuteLeg, x.legIndex, x.signatureVoucherBump, x.cpiAuthorityBump),
   };
 }
 

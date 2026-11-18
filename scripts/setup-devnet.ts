@@ -2,35 +2,41 @@
 /**
  * One-shot devnet setup for the issuer demo.
  *
- *   pnpm setup:devnet [--program-id <id>] [--skip-dkg] [--rpc <url>] [--grpc <host:port>]
+ *   pnpm setup:devnet [--program-id <id>] [--fresh] [--skip-contracts] [--rpc <url>] [--grpc <url>]
  *
- * 1. keys/            admin, executor, alice, bob, carol (generated once, airdropped)
- * 2. Ika DKG          two zero-trust dWallets (secp256k1 for EVM chains, curve25519 for Sui)
- *                     via the pre-alpha gRPC; authority transferred to the ledger's CPI PDA
+ * 1. keys/            admin, executor, alice, bob, carol (generated once; funded from the Solana CLI wallet)
+ * 2. Ika              the issuer becomes a user of the network (encryption keys, gas deposit), then two
+ *                     zero-trust dWallets (secp256k1 for EVM chains, curve25519 for Sui) through the SDK
  * 3. Token-2022       TBILL mint (authority = mint_authority PDA) + PDA-owned treasury account
- * 4. init_asset       TBILL, cap 100M, 2-of-3 approvers, 5 s timelock
+ * 4. init_asset       TBILL, cap 100M, 2-of-3 approvers, 5 s timelock, the issuer's Ika request key
  * 4b. contracts       MintController on Sepolia / Base Sepolia / Tempo Moderato, Move package on Sui testnet
  * 5. add_chain × 5    Solana, Ethereum, Base, Sui, Tempo with the seed supply
+ * 5b. hand-over       each dWallet's owner becomes the ledger's CPI authority, after its rules exist
  * 6. deployments/devnet.json
  *
- * Idempotent-ish: existing keys, asset and chain accounts are reused; pass
- * `--skip-dkg` to reuse dWallets recorded in a previous deployments file.
+ * Re-running resumes: existing keys, dWallets, asset and chain accounts are reused. A new asset is
+ * created when the Ika network, the issuer's request key or a dWallet changed (an Ika wipe), or
+ * with `--fresh`.
  */
 import { secp256k1 } from '@noble/curves/secp256k1.js';
 import { blake2b } from '@noble/hashes/blake2.js';
 import { keccak_256 } from '@noble/hashes/sha3.js';
 import {
-  AccountRole, airdropFactory, createKeyPairSignerFromPrivateKeyBytes, getAddressDecoder, getAddressEncoder, lamports,
+  AccountRole, createKeyPairSignerFromPrivateKeyBytes, getAddressDecoder, getAddressEncoder,
   type Address, type Instruction, type KeyPairSigner,
 } from '@solana/kit';
 import {
-  CHAIN_LIST, ChainId, IKA_DWALLET_PROGRAM_DEVNET, IKA_GRPC_DEVNET, IkaCurve, LegKind, SOLANA_DEVNET_RPC, SOLANA_DEVNET_WS, TOKEN_2022_PROGRAM,
-  buildAddChainIx, buildInitAssetIx, findAssetPda, findChainPda, findCpiAuthorityPda, findMintAuthorityPda,
+  CHAIN_LIST, ChainId, IKA_DEVNET_PRE_ALPHA, IkaCurve, LegKind, SOLANA_DEVNET_RPC, TOKEN_2022_PROGRAM,
+  buildAddChainIx, buildInitAssetIx, fetchDWallet, findAssetPda, findChainPda, findCpiAuthorityPda, findMintAuthorityPda,
   rawDomainSeparator, toHex, fromHex,
   type ChainMeta,
 } from '@ika-rwa/ledger-sdk';
-import { createIkaClient, findDwalletPda, transferOwnershipData } from '@ika-rwa/ledger-sdk/ika';
-import { accountExists, createClient, pollAccount, repoRoot, sendInstructions, type Deployment, type SolanaClient } from '@ika-rwa/executor';
+import { sdkCurve } from '@ika-rwa/ledger-sdk/ika';
+import {
+  accountExists, connectIka, createClient, ikaIssuerPath, loadIkaIssuer, loadIssuer, loadKeypair, registerIssuer, repoRoot, saveIkaIssuer, sendIka,
+  sendInstructions, type DWalletName, type Deployment, type IkaIssuerSecrets, type SolanaClient,
+} from '@ika-rwa/executor';
+import { homedir } from 'node:os';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { resolve } from 'node:path';
@@ -48,8 +54,13 @@ const KEYS = resolve(ROOT, 'keys');
 const DEPLOYMENT = resolve(ROOT, 'deployments/devnet.json');
 const RPC_URL = arg('rpc') ?? process.env.RPC_URL ?? SOLANA_DEVNET_RPC;
 const WS_URL = process.env.WS_URL ?? RPC_URL.replace(/^http/, 'ws');
-const GRPC_URL = arg('grpc') ?? process.env.GRPC_URL ?? IKA_GRPC_DEVNET;
-const IKA_PROGRAM = (process.env.IKA_PROGRAM ?? IKA_DWALLET_PROGRAM_DEVNET) as Address;
+const GRPC_URL = arg('grpc') ?? process.env.GRPC_URL ?? IKA_DEVNET_PRE_ALPHA.grpcUrl;
+// The ledger program is built for one Ika program (`--features devnet-pre-alpha`); this must be the same one.
+const IKA_PROGRAM = (process.env.IKA_PROGRAM ?? IKA_DEVNET_PRE_ALPHA.programId) as Address;
+const IKA_NETWORK_KEY = process.env.IKA_NETWORK_KEY ?? IKA_DEVNET_PRE_ALPHA.networkKey;
+const IKA_NET = { programId: IKA_PROGRAM, grpcUrl: GRPC_URL, networkKey: IKA_NETWORK_KEY, chainNumber: IKA_DEVNET_PRE_ALPHA.chainNumber, networkValue: IKA_DEVNET_PRE_ALPHA.networkValue };
+/** What the deployment file records about the Ika network. */
+const IKA_FIELDS = { ikaProgram: IKA_PROGRAM, grpcUrl: GRPC_URL, ikaNetworkKey: IKA_NETWORK_KEY, ikaChainNumber: IKA_NET.chainNumber, ikaNetworkValue: IKA_NET.networkValue };
 
 const ONE = 1_000_000n; // 6 decimals
 const SYSTEM_PROGRAM = '11111111111111111111111111111111' as Address;
@@ -79,21 +90,42 @@ async function loadOrCreateKey(name: string): Promise<KeyPairSigner> {
   return signer;
 }
 
+/** System program `Transfer`. */
+function transferIx(from: Address, to: Address, amount: bigint): Instruction {
+  const data = new Uint8Array(12);
+  data.set([2, 0, 0, 0], 0);
+  data.set(u64(amount), 4);
+  return {
+    programAddress: SYSTEM_PROGRAM,
+    accounts: [
+      { address: from, role: AccountRole.WRITABLE_SIGNER },
+      { address: to, role: AccountRole.WRITABLE },
+    ],
+    data,
+  };
+}
+
+/**
+ * Top `who` up to `minSol` from the funding wallet. The devnet RPC faucet is closed, so the SOL
+ * comes from a wallet that already holds some: `FUNDER_KEYPAIR`, or the Solana CLI's default key.
+ */
+/** A new keypair, written over `keys/<name>.json`. */
+async function freshKey(name: string): Promise<KeyPairSigner> {
+  const seed = globalThis.crypto.getRandomValues(new Uint8Array(32));
+  const signer = await createKeyPairSignerFromPrivateKeyBytes(seed);
+  writeFileSync(resolve(KEYS, `${name}.json`), JSON.stringify(Array.from([...seed, ...pubkeyBytes(signer.address)])));
+  return signer;
+}
+
 async function ensureFunded(client: SolanaClient, who: KeyPairSigner, minSol: number): Promise<void> {
   const bal = await client.rpc.getBalance(who.address).send();
-  if (Number(bal.value) >= minSol * 1e9) return;
-  const airdrop = airdropFactory({ rpc: client.rpc, rpcSubscriptions: client.rpcSubscriptions } as Parameters<typeof airdropFactory>[0]);
-  for (let attempt = 1; attempt <= 4; attempt++) {
-    try {
-      await airdrop({ commitment: 'confirmed', lamports: lamports(BigInt(Math.round(minSol * 1e9))), recipientAddress: who.address });
-      ok(`airdropped ${minSol} SOL to ${who.address}`);
-      return;
-    } catch (e) {
-      console.warn(`  airdrop attempt ${attempt} failed: ${(e as Error).message}`);
-      await new Promise((r) => setTimeout(r, 3_000 * attempt));
-    }
-  }
-  throw new Error(`could not fund ${who.address}; run: solana airdrop ${minSol} ${who.address} -u devnet`);
+  const missing = BigInt(Math.round(minSol * 1e9)) - bal.value;
+  if (missing <= 0n) return;
+  const funderPath = process.env.FUNDER_KEYPAIR ?? resolve(homedir(), '.config/solana/id.json');
+  if (!existsSync(funderPath)) throw new Error(`${who.address} needs ${Number(missing) / 1e9} SOL: fund it at https://faucet.solana.com, or set FUNDER_KEYPAIR`);
+  const funder = await loadKeypair(funderPath);
+  await sendInstructions(client, funder, [transferIx(funder.address, who.address, missing)]);
+  ok(`funded ${who.address} with ${Number(missing) / 1e9} SOL from ${funder.address}`);
 }
 
 // ───────────────────────────── program id ─────────────────────────────────
@@ -214,7 +246,7 @@ async function main(): Promise<void> {
   const programId = (arg('program-id') ?? previous.programId ?? programIdFromKeypair()) as Address;
   val('program', programId);
   val('rpc', RPC_URL);
-  val('ika gRPC', GRPC_URL);
+  val('ika network', GRPC_URL);
   val('ika program', IKA_PROGRAM);
   const client = createClient(RPC_URL, WS_URL);
 
@@ -224,68 +256,104 @@ async function main(): Promise<void> {
   const executor = await loadOrCreateKey('executor');
   const approverNames = ['alice', 'bob', 'carol'];
   const approvers = await Promise.all(approverNames.map((n) => loadOrCreateKey(`approver-${n}`)));
-  await ensureFunded(client, admin, 0.5);
-  await ensureFunded(client, executor, 0.5);
-  for (const a of approvers) await ensureFunded(client, a, 0.2);
+  await ensureFunded(client, admin, 0.3);
+  await ensureFunded(client, executor, 0.3);
+  for (const a of approvers) await ensureFunded(client, a, 0.1);
+  const [cpiAuthority] = await findCpiAuthorityPda(programId);
 
-  // ── PDAs ──
+  // ── 2. the issuer on Ika, and its dWallets ──
+  log('2/6', 'Ika: the issuer and its dWallets (zero-trust: the issuer holds the user share, the ledger decides what is signed)');
+  const secrets: IkaIssuerSecrets = loadIkaIssuer() ?? { rootSeed: globalThis.crypto.getRandomValues(new Uint8Array(32)), dwallets: {} };
+  // The root seed decrypts the user share of every dWallet made with it: keep it before anything is created.
+  saveIkaIssuer(secrets);
+  const dwallets: Record<string, DWalletRecord> = {};
+  let ikaSigningKey: Uint8Array;
+  const { ikaClient, close } = connectIka(client.rpc, IKA_NET);
+  try {
+    const issuer = await loadIssuer(ikaClient, secrets.rootSeed);
+    ikaSigningKey = issuer.requestKey;
+    val('issuer request key', toHex(ikaSigningKey));
+    const created = await registerIssuer(client, ikaClient, executor, issuer);
+    ok(created.length ? `registered with the network: ${created.join(', ')}` : 'already registered with the network');
+
+    for (const [name, curve] of [
+      ['secp256k1', IkaCurve.Secp256k1],
+      ['curve25519', IkaCurve.Curve25519],
+    ] as const satisfies readonly (readonly [DWalletName, number])[]) {
+      const keys = issuer.keys[curve];
+      let dWallet = secrets.dwallets[name];
+      // A dWallet kept from an earlier run is reused while its account is still on Solana (a wipe removes it).
+      if (dWallet && !(await accountExists(client.rpc, ikaClient.getDWalletAddress(dWallet)))) dWallet = undefined;
+      if (!dWallet) {
+        log('DKG', `${name} …`);
+        ({ dWallet } = await ikaClient.requestDWalletDKG({ curve: sdkCurve(curve), userShareEncryptionKeys: keys, owner: executor.address }));
+        // Keep the dWallet before its share is accepted: its user share exists nowhere else.
+        secrets.dwallets[name] = dWallet;
+        saveIkaIssuer(secrets);
+      }
+      const pda = ikaClient.getDWalletAddress(dWallet);
+      const onChain = await fetchDWallet(client.rpc, pda);
+      if (!onChain) throw new Error(`dWallet ${pda} is not on Solana`);
+      if (onChain.state !== 1) {
+        // The network wrote the dWallet and left the issuer's share waiting; the acceptance makes it usable.
+        await sendIka(client, ikaClient, executor, keys, (tx) => tx.acceptEncryptedUserShare({ dWallet }));
+        await ikaClient.waitForDWallet(dWallet, { timeout: 300_000, interval: 2_000 });
+      }
+      if (dWallet.acceptance) {
+        delete dWallet.acceptance;
+        saveIkaIssuer(secrets);
+      }
+      ok(`${name} dWallet ${pda}, public key ${toHex(dWallet.publicKey)}`);
+      const rec: DWalletRecord = { pda, publicKeyHex: toHex(dWallet.publicKey) };
+      if (curve === IkaCurve.Secp256k1) rec.evmAddress = `0x${toHex(evmAddressFromSecp256k1(dWallet.publicKey))}`;
+      else rec.suiAddress = `0x${toHex(suiAddressFromEd25519(dWallet.publicKey))}`;
+      dwallets[name] = rec;
+    }
+
+    // ── the asset this run works on ──
+    // An asset is bound to its Ika network, its signing key and its dWallets. When one of them
+    // changed (an Ika wipe, a new root seed), the old asset cannot sign any more: start a new one.
+    const same = previous.asset !== undefined && !flag('fresh') && previous.ikaProgram === IKA_PROGRAM && previous.ikaSigningKey === toHex(ikaSigningKey)
+      && previous.dwallets?.secp256k1?.pda === dwallets.secp256k1.pda && previous.dwallets?.curve25519?.pda === dwallets.curve25519.pda;
+    if (!same && previous.asset) ok(`the Ika network, signing key or dWallets changed since ${previous.asset}: creating a new asset`);
+    const resume: Partial<Deployment> = same ? previous : {};
+    await setupAsset({ client, ikaClient, issuer, programId, admin, executor, approvers, approverNames, cpiAuthority, dwallets, secrets, ikaSigningKey, resume });
+  } finally {
+    close();
+  }
+  console.log('\n\x1b[1m\x1b[32m═══ setup complete ═══\x1b[0m\n');
+}
+
+interface AssetSetup {
+  client: SolanaClient;
+  ikaClient: ReturnType<typeof connectIka>['ikaClient'];
+  issuer: Awaited<ReturnType<typeof loadIssuer>>;
+  programId: Address;
+  admin: KeyPairSigner;
+  executor: KeyPairSigner;
+  approvers: KeyPairSigner[];
+  approverNames: string[];
+  cpiAuthority: Address;
+  dwallets: Record<string, DWalletRecord>;
+  secrets: IkaIssuerSecrets;
+  ikaSigningKey: Uint8Array;
+  /** The previous deployment, when this run continues it; empty for a new asset. */
+  resume: Partial<Deployment>;
+}
+
+async function setupAsset(x: AssetSetup): Promise<void> {
+  const { client, ikaClient, issuer, programId, admin, executor, approvers, approverNames, cpiAuthority, dwallets, secrets, ikaSigningKey, resume: previous } = x;
   const createKey = previous.createKey ? fromHex(previous.createKey) : globalThis.crypto.getRandomValues(new Uint8Array(32));
   const [asset, assetBump] = await findAssetPda(programId, createKey);
   const [mintAuthority, mintAuthorityBump] = await findMintAuthorityPda(programId, asset);
-  const [cpiAuthority] = await findCpiAuthorityPda(programId);
   val('asset', asset);
   val('mint authority', mintAuthority);
   val('cpi authority', cpiAuthority);
+  const base = { programId, ...IKA_FIELDS, ikaSigningKey: toHex(ikaSigningKey), rpcUrl: RPC_URL, wsUrl: WS_URL, createKey: toHex(createKey), dwallets };
 
-  // ── 2. dWallets ──
-  log('2/6', 'Ika dWallets (zero-trust: encrypted user share held by the issuer, network share gated by the ledger)');
-  const dwallets: Record<string, DWalletRecord> = {};
-  if (flag('skip-dkg')) {
-    if (!previous.dwallets?.secp256k1 || !previous.dwallets?.curve25519) throw new Error('--skip-dkg needs dwallets in deployments/devnet.json');
-    for (const [name, rec] of Object.entries(previous.dwallets) as [string, DWalletRecord][]) {
-      const pk = fromHex(rec.publicKeyHex);
-      if (name === 'secp256k1') rec.evmAddress ??= `0x${toHex(evmAddressFromSecp256k1(pk))}`;
-      else rec.suiAddress ??= `0x${toHex(suiAddressFromEd25519(pk))}`;
-      dwallets[name] = rec;
-    }
-    ok('reusing dWallets from previous deployment');
-  } else {
-    const ika = createIkaClient(GRPC_URL, { publicKey: pubkeyBytes(executor.address) });
-    try {
-      for (const [name, curve] of [
-        ['secp256k1', IkaCurve.Secp256k1],
-        ['curve25519', IkaCurve.Curve25519],
-      ] as const) {
-        log('DKG', `${name} …`);
-        const r = await ika.requestDkg(curve);
-        const [pda] = await findDwalletPda(IKA_PROGRAM, curve, r.publicKey);
-        ok(`${name} public key ${toHex(r.publicKey)}`);
-        await pollAccount(client.rpc, pda, (d) => d[0] === 2, 60_000);
-        ok(`dWallet on-chain ${pda}`);
-        // Hand the dWallet to the ledger program: only its CPI authority PDA can approve messages now.
-        const ix: Instruction = {
-          programAddress: IKA_PROGRAM,
-          accounts: [
-            { address: executor.address, role: AccountRole.READONLY_SIGNER },
-            { address: pda, role: AccountRole.WRITABLE },
-          ],
-          data: transferOwnershipData(pubkeyBytes(cpiAuthority)),
-        };
-        const sent = await sendInstructions(client, executor, [ix]);
-        ok(`authority → ${cpiAuthority} (${sent.signature})`);
-        const rec: DWalletRecord = { pda, publicKeyHex: toHex(r.publicKey) };
-        if (curve === IkaCurve.Secp256k1) rec.evmAddress = `0x${toHex(evmAddressFromSecp256k1(r.publicKey))}`;
-        else rec.suiAddress = `0x${toHex(suiAddressFromEd25519(r.publicKey))}`;
-        dwallets[name] = rec;
-      }
-    } finally {
-      ika.close();
-    }
-  }
-
-  // Persist what we have so far: a later failure must not lose the dWallets or the asset createKey.
+  // Persist what we have so far: a later failure must not lose the asset createKey.
   mkdirSync(resolve(ROOT, 'deployments'), { recursive: true });
-  writeFileSync(DEPLOYMENT, JSON.stringify({ ...previous, programId, ikaProgram: IKA_PROGRAM, rpcUrl: RPC_URL, wsUrl: WS_URL, grpcUrl: GRPC_URL, createKey: toHex(createKey), dwallets }, null, 2) + '\n');
+  writeFileSync(DEPLOYMENT, JSON.stringify({ ...previous, ...base, asset, mintAuthority, cpiAuthority, executor: executor.address }, null, 2) + '\n');
 
   // ── 3. Token-2022 mint + treasury ──
   log('3/6', 'Token-2022 TBILL mint + PDA-owned treasury');
@@ -297,8 +365,8 @@ async function main(): Promise<void> {
     treasury = prevSolana.treasury as Address;
     ok(`reusing mint ${mint}`);
   } else {
-    const mintKp = await loadOrCreateKey('tbill-mint');
-    const treasuryKp = await loadOrCreateKey('tbill-treasury');
+    // A new asset gets a new mint: the mint authority is the asset's own PDA.
+    const [mintKp, treasuryKp] = await Promise.all([freshKey('tbill-mint'), freshKey('tbill-treasury')]);
     mint = mintKp.address;
     treasury = treasuryKp.address;
     const mintRent = await client.rpc.getMinimumBalanceForRentExemption(82n).send();
@@ -326,7 +394,7 @@ async function main(): Promise<void> {
   } else {
     const ix = buildInitAssetIx({
       programId, asset, bump: assetBump, admin: admin.address, payer: admin.address, createKey, symbol: 'TBILL', decimals: 6, threshold: 2,
-      timelockSecs: BigInt(process.env.TIMELOCK_SECS ?? 5), globalCap: 100_000_000n * ONE, executor: executor.address, ikaProgram: IKA_PROGRAM,
+      timelockSecs: BigInt(process.env.TIMELOCK_SECS ?? 5), globalCap: 100_000_000n * ONE, executor: executor.address, ikaSigningKey,
       mintAuthorityBump, approvers: approvers.map((a) => a.address),
     });
     const sent = await sendInstructions(client, admin, [ix]);
@@ -334,8 +402,9 @@ async function main(): Promise<void> {
   }
   // Persist the asset so the destination-chain deploy scripts can bind their controllers to it.
   writeFileSync(DEPLOYMENT, JSON.stringify({
-    ...previous, programId, ikaProgram: IKA_PROGRAM, rpcUrl: RPC_URL, wsUrl: WS_URL, grpcUrl: GRPC_URL, createKey: toHex(createKey), dwallets,
+    ...previous, ...base,
     asset, mintAuthority, cpiAuthority, executor: executor.address,
+    chains: { ...previous.chains, [String(ChainId.Solana)]: { pda: (await findChainPda(programId, asset, ChainId.Solana))[0], contract: mint, treasury } },
     approvers: approverNames.map((n, i) => ({ name: n[0].toUpperCase() + n.slice(1), pubkey: approvers[i].address })),
   }, null, 2) + '\n');
 
@@ -377,10 +446,27 @@ async function main(): Promise<void> {
     ok(`${meta.name}: ${chainPda} authorized ${seed[meta.id].authorized / ONE} / cap ${seed[meta.id].cap / ONE} (${sent.signature})`);
   }
 
+  // ── 5b. hand the dWallets to the ledger ──
+  // Last, once every chain's rules are on Solana: from here only the ledger's CPI authority can
+  // issue a signature voucher for them, and only for a leg that passed the policy.
+  log('5b', 'dWallets → the ledger');
+  for (const [name, curve] of [['secp256k1', IkaCurve.Secp256k1], ['curve25519', IkaCurve.Curve25519]] as const) {
+    const dWallet = secrets.dwallets[name]!;
+    const onChain = await fetchDWallet(client.rpc, dwallets[name].pda as Address);
+    if (onChain?.owner === cpiAuthority) {
+      ok(`${name} already owned by ${cpiAuthority}`);
+    } else if (onChain?.owner === executor.address) {
+      const { sent } = await sendIka(client, ikaClient, executor, issuer.keys[curve], (tx) => tx.transferDWallet({ dWallet, newOwner: cpiAuthority }));
+      ok(`${name} owner → ${cpiAuthority} (${sent.signature})`);
+    } else {
+      throw new Error(`${name} dWallet ${dwallets[name].pda} is owned by ${onChain?.owner}, neither the executor nor the ledger`);
+    }
+  }
+
   // ── 6. deployments/devnet.json ──
   log('6/6', 'writing deployments/devnet.json');
   const deployment: Deployment = {
-    programId, ikaProgram: IKA_PROGRAM, rpcUrl: RPC_URL, wsUrl: WS_URL, grpcUrl: GRPC_URL, createKey: toHex(createKey), asset, mintAuthority, cpiAuthority,
+    ...base, asset, mintAuthority, cpiAuthority,
     executor: executor.address,
     approvers: approverNames.map((n, i) => ({ name: n[0].toUpperCase() + n.slice(1), pubkey: approvers[i].address })),
     dwallets, chains,
@@ -388,7 +474,7 @@ async function main(): Promise<void> {
   mkdirSync(resolve(ROOT, 'deployments'), { recursive: true });
   writeFileSync(DEPLOYMENT, JSON.stringify(deployment, null, 2) + '\n');
   ok(DEPLOYMENT);
-  console.log('\n\x1b[1m\x1b[32m═══ setup complete ═══\x1b[0m\n');
+  ok(`${ikaIssuerPath()} holds the issuer's Ika root seed and dWallet shares: keep it secret`);
 }
 
 function readJson<T>(rel: string): T | null {

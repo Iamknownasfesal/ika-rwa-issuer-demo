@@ -16,7 +16,7 @@ export type ChainIdValue = (typeof ChainId)[keyof typeof ChainId];
 
 export type ChainKey = 'solana' | 'ethereum' | 'base' | 'sui' | 'tempo';
 
-/** `ChainDeployment.leg_kind`: 0 = Token-2022 CPI on Solana, 1 = Ika `approve_message` CPI. */
+/** `ChainDeployment.leg_kind`: 0 = Token-2022 CPI on Solana, 1 = Ika `issue_signature_voucher` CPI. */
 export const LegKind = { SolanaNative: 0, IkaForeign: 1 } as const;
 /** `ChainDeployment.encoding`: 0 = raw authorization bytes, 1 = EIP-712. */
 export const Encoding = { Raw: 0, Eip712: 1 } as const;
@@ -24,8 +24,6 @@ export const Encoding = { Raw: 0, Eip712: 1 } as const;
 export const IkaCurve = { Secp256k1: 0, Secp256r1: 1, Curve25519: 2, Ristretto: 3 } as const;
 /** Ika `DWalletSignatureScheme` (u16). */
 export const IkaScheme = { EcdsaKeccak256: 0, EddsaSha512: 5 } as const;
-/** Ika `DWalletSignatureAlgorithm` (used for presigns). */
-export const IkaAlgorithm = { ECDSASecp256k1: 0, ECDSASecp256r1: 1, Taproot: 2, EdDSA: 3, Schnorrkel: 4 } as const;
 
 export interface ChainMeta {
   id: number;
@@ -104,13 +102,16 @@ export function chainById(id: number): ChainMeta {
   return c;
 }
 
-/** Ika pre-alpha environment. */
-export const IKA_DWALLET_PROGRAM_DEVNET = '87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY';
-export const IKA_GRPC_DEVNET = 'pre-alpha-dev-1.ika.ika-network.net:443';
+/**
+ * The Ika Solana devnet pre-alpha. A wipe can move the program and change the network key;
+ * the coordinator account records the chain number and the network value.
+ */
+export const IKA_DEVNET_PRE_ALPHA = {
+  programId: '8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv',
+  grpcUrl: 'https://solana-alpha-dev-1.ika-network.net',
+  networkKey: 'fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed',
+  chainNumber: 1,
+  networkValue: 3,
+} as const;
 export const SOLANA_DEVNET_RPC = 'https://api.devnet.solana.com';
 export const SOLANA_DEVNET_WS = 'wss://api.devnet.solana.com';
-
-/** Ika presign algorithm for a chain's curve. */
-export function presignAlgorithmForCurve(curve: number): number {
-  return curve === IkaCurve.Secp256k1 ? IkaAlgorithm.ECDSASecp256k1 : IkaAlgorithm.EdDSA;
-}

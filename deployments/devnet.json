@@ -1,12 +1,28 @@
 {
   "programId": "DkXkmLYeR63gxhvD4FkV2oAJjkKzUUGJhDoqA6ULdauE",
-  "ikaProgram": "87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY",
+  "ikaProgram": "8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv",
+  "grpcUrl": "https://solana-alpha-dev-1.ika-network.net",
+  "ikaNetworkKey": "fe8a6482521cc4bae052c55cd5b3c92d05c8749bcc2c584046de3efb077d65ed",
+  "ikaChainNumber": 1,
+  "ikaNetworkValue": 3,
+  "ikaSigningKey": "16fbe38bbe5507c4f48e7bddddbd031be5a1b80b29577f99d70612714fa0630b",
   "rpcUrl": "https://api.devnet.solana.com",
   "wsUrl": "wss://api.devnet.solana.com",
-  "grpcUrl": "pre-alpha-dev-1.ika.ika-network.net:443",
-  "createKey": "d1a700fa7e67c2117fcb0578858c834893d8d3edcc0da9fae01dd7500ab8ddbe",
-  "asset": "E4NBUCYWYQL8VCd4mASHw3StVd2fGxh2o5xLM6CzTb9x",
-  "mintAuthority": "Hhup4anfWmLBtK8y4jkxeQazywmGr4CQvmZ43TW62Ryx",
+  "createKey": "e54e1c383e610711697f8ec8110ba6c8289594add6b962005b2508c535075910",
+  "dwallets": {
+    "secp256k1": {
+      "pda": "6zJk6zWEXDCqFDazBhnsefcQbKg4nH62bZKhXF4ENjY9",
+      "publicKeyHex": "0375fcd22653d35c2737b851799c9636c4df39f1d5018aac3ab63019f1ca8cf2e9",
+      "evmAddress": "0xe59af6e4c81cdc2eebe97e5583a55b3bfbd2e3b5"
+    },
+    "curve25519": {
+      "pda": "Hzmmx6fcZCagX4dd8c5R4w9qTpygy3jep4b8P3GB5M77",
+      "publicKeyHex": "4c18b46303b8374dd94142df002f3e0d257801a19a0f1d99d26998c0550d3459",
+      "suiAddress": "0x97e33b106adfc4d0b5c0dcb6e505c2bbd6d26ddeede6f71223646358fc7a1d2d"
+    }
+  },
+  "asset": "8dvRSs7Ety6rsz7xjq5ujTe5LHg6H1qtvAQh8dVUcxJu",
+  "mintAuthority": "7avjwtFDKwyzpmQ3ZM6Y7vNPbh4g8rFne93rhgAYJmii",
   "cpiAuthority": "8TthbQqiWtacyE8EwhQVPFXDjzKuDL1KeHmELFviuSM1",
   "executor": "HJ2do4R7vEZpYHTAHyoA5YHLuoBwPZysgckHSsUPvxFi",
   "approvers": [
@@ -23,42 +39,30 @@
       "pubkey": "F9reGuXRoLubQdF1qrgcYkvH5hBgn9qBTsaiKrxA6hrg"
     }
   ],
-  "dwallets": {
-    "secp256k1": {
-      "pda": "EAAtkv81jxQBQqTQfunhLcixDFZ9KZqVLSKyZj1kB9Uo",
-      "publicKeyHex": "036b9b4167198fba816321a709b0a70807ad60020a49178bac8776582d59adb786",
-      "evmAddress": "0x8315319bc096b2e9368875516ebee3c9e56f99d0"
-    },
-    "curve25519": {
-      "pda": "DRFW3r7AqyAiotzgMVCodLXFW1N1yc2WBEp8rZi62WfB",
-      "publicKeyHex": "2f755ccccf1b0e1d74cc3fbe7ff2eaeb453ffb8a418ab957378fb333596ee17a",
-      "suiAddress": "0xf9d95e21ae904069277dc2d3648106fd89f83fe15c8cccd936a53d5a72ba5b7e"
-    }
-  },
   "chains": {
     "1": {
-      "pda": "H1MNtKy6zAGJY7m8Ptb85oDUMGprz3mYZx3upn4xj12q",
-      "contract": "F6811ztq7Gmy7wi3MGfuSafhqh3iQ6YMYHjjscCzr4tu",
-      "treasury": "9d3dXcYgKS1VGHMAq9MNAKoyba2mMjfSxP8N3oyawzzy"
+      "pda": "7i1DusQuMKawf1NNSxq7bb6roztkB1vN1XWxN1dpe6Mg",
+      "contract": "ByBf16MDGwNDRpmHdmDDAhzPGVk6Ymin2Fz6ZbhVRPwv",
+      "treasury": "8MyPxgCs1ewZZUaLF4Pm2cCMoFiSySiURVficobQkxHs"
     },
     "2": {
-      "pda": "9g4KaNLDwiUwfFjueo3JbNEkSBE7uLM4stAtFAhzWxRD",
-      "contract": "0x09538d6b32c1507a181a2720e8aae6f991039c1a",
+      "pda": "EK9EXZ6iprpXyZRdhn6fgBZWWhdxgnfhdsemDhK3LBDR",
+      "contract": "0x504872fd26aee3d94ad3e008e402c5242703ca8b",
       "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
     },
     "3": {
-      "pda": "JBdrisTm5AAEs5zymReuE6ASxtQRtHCkQoWFTZFgJXLL",
-      "contract": "0x5806ba6619e4163650d8e8fa239aa9638b4931f1",
+      "pda": "Q2cExgmkD2AEBRrtbEM5Qu2TfbCtHrFhGpPAf32eLAH",
+      "contract": "0xed72f08c9069c17b1fd595b56c2c999b3ae8e73f",
       "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
     },
     "4": {
-      "pda": "4A9NpvPKoPKds4D3PFeqwY5G9yiYPZLe33xJyyDd7zQh",
-      "contract": "0xbe26e5b7f65895bae556f00b289fc89bf0eef06c9691a243ab451a713f2d3072",
+      "pda": "97nAXX5dmtTJfNVLvkcTxukbbiyZ7UGBLhKNj63G2uAf",
+      "contract": "0xfc345623687544e05507f248ecb37f0020a7df07017a450ff9f60fad464b5ae4",
       "treasury": "0xe5b7bd960c1a4053465f3042623d59123f2f0a1c621c66816161454288ae7c10"
     },
     "5": {
-      "pda": "34ebWgGpqxj1WhGnx4Kf1yxXRGrmRDG5zCpbyvePMH3p",
-      "contract": "0x44c83da16951366a7105704f26984a0fa6814004",
+      "pda": "HJJXzwCJbzszHGqu3Jzh1osWJy9H9NtTsnb1b8rJY1sL",
+      "contract": "0xc1f25ecc5ee48066fe61bd53d26f07ae2f2e2a92",
       "treasury": "0x77FA7A0B63A200db2fFdCD4e0396eDa3b242957A"
     }
   }

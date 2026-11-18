@@ -15,9 +15,9 @@ use crate::{
     ika::{self, DWalletContext},
     state::{
         ADDR_BYTES, ADDR_LEN, DISC_ASSET, DISC_CHAIN, DISC_INTENT, MAX_ALLOWLIST, MAX_APPROVERS,
-        SEED_ASSET, SEED_CHAIN, SEED_INTENT, SEED_MINT_AUTHORITY, VERSION, allowlist_contains,
-        approver_index, asset, chain, intent, leg, leg_offset, read_32, read_addr, read_i64,
-        read_u16, read_u64, write_addr, write_i64, write_u16, write_u64,
+        SEED_ASSET, SEED_CHAIN, SEED_INTENT, SEED_MINT_AUTHORITY, SEED_SIGNATURE_VOUCHER, VERSION,
+        allowlist_contains, approver_index, asset, chain, intent, leg, leg_offset, read_32,
+        read_addr, read_i64, read_u16, read_u64, write_addr, write_i64, write_u16, write_u64,
     },
 };
 
@@ -108,7 +108,7 @@ fn require_operator(asset_data: &[u8], signer: &AccountView) -> ProgramResult {
 // ───────────────────────────── 0: InitAsset ───────────────────────────────
 
 /// Data: `create_key(32) | symbol(8) | decimals(1) | threshold(1) | timelock_secs(8) |
-///        global_cap(8) | executor(32) | ika_program(32) | bump(1) | mint_authority_bump(1) |
+///        global_cap(8) | executor(32) | ika_signing_key(32) | bump(1) | mint_authority_bump(1) |
 ///        approver_count(1) | approvers(32*n)`
 ///
 /// Accounts: `asset(w)`, `admin(s)`, `payer(ws)`, `system_program`
@@ -131,7 +131,12 @@ pub fn init_asset(
     let timelock_secs = read_u64(take(data, 42, 8)?, 0);
     let global_cap = read_u64(take(data, 50, 8)?, 0);
     let executor = take(data, 58, 32)?;
-    let ika_program = take(data, 90, 32)?;
+    // The Ed25519 request key of the issuer: the only key Ika accepts a sign request from
+    // for the vouchers this asset issues.
+    let ika_signing_key = take(data, 90, 32)?;
+    if ika_signing_key == [0u8; 32] {
+        return Err(LedgerError::InvalidConfig.into());
+    }
     let bump = *data.get(122).ok_or(ProgramError::InvalidInstructionData)?;
     let mint_authority_bump = *data.get(123).ok_or(ProgramError::InvalidInstructionData)?;
     let approver_count = *data.get(124).ok_or(ProgramError::InvalidInstructionData)? as usize;
@@ -169,7 +174,7 @@ pub fn init_asset(
     d[asset::APPROVERS..asset::APPROVERS + approver_count * 32].copy_from_slice(approvers);
     d[asset::BUMP] = bump;
     d[asset::MINT_AUTHORITY_BUMP] = mint_authority_bump;
-    d[asset::IKA_PROGRAM..asset::IKA_PROGRAM + 32].copy_from_slice(ika_program);
+    d[asset::IKA_SIGNING_KEY..asset::IKA_SIGNING_KEY + 32].copy_from_slice(ika_signing_key);
     Ok(())
 }
 
@@ -511,12 +516,16 @@ pub fn approve_intent(
 
 // ──────────────────────────── 4: ExecuteLeg ───────────────────────────────
 
-/// Data: `leg_index(1) | message_approval_bump(1) | cpi_authority_bump(1)`
+/// Data: `leg_index(1) | signature_voucher_bump(1) | cpi_authority_bump(1)`
 ///
 /// Accounts: `asset(w)`, `intent(w)`, `chain(w)`, `authority(s)`, `payer(ws)`, `system_program`, then
 /// * Solana-native leg: `token_program`, `mint(w)`, `token_account(w)`, `mint_authority`
-/// * Ika foreign leg: `dwallet_program`, `coordinator`, `message_approval(w)`, `dwallet`,
+/// * Ika foreign leg: `dwallet_program`, `coordinator`, `signature_voucher(w)`, `dwallet`,
 ///   `this_program`, `cpi_authority`
+///
+/// A foreign leg issues one Ika signature voucher for the leg's authorization message, at this
+/// program's PDA `["signature_voucher", intent, leg_index]`. The voucher names the asset's
+/// `ika_signing_key` as the only key that may ask the network for the signature.
 pub fn execute_leg(
     program_id: &Address,
     accounts: &mut [AccountView],
@@ -542,7 +551,7 @@ pub fn execute_leg(
     require_writable(chain_acc)?;
 
     let leg_index = *data.first().ok_or(ProgramError::InvalidInstructionData)? as usize;
-    let message_approval_bump = *data.get(1).ok_or(ProgramError::InvalidInstructionData)?;
+    let signature_voucher_bump = *data.get(1).ok_or(ProgramError::InvalidInstructionData)?;
     let cpi_authority_bump = *data.get(2).ok_or(ProgramError::InvalidInstructionData)?;
 
     // ── read everything we need, then drop the borrows before any CPI ──
@@ -639,7 +648,7 @@ pub fn execute_leg(
     };
 
     let mut message_digest_out = [0u8; 32];
-    let mut message_approval_out = [0u8; 32];
+    let mut signature_voucher_out = [0u8; 32];
     let mut new_leg_status = leg::STATUS_AUTHORIZED;
 
     match ch[chain::LEG_KIND] {
@@ -679,7 +688,7 @@ pub fn execute_leg(
             let [
                 dwallet_program,
                 coordinator,
-                message_approval,
+                signature_voucher,
                 dwallet,
                 this_program,
                 cpi_authority,
@@ -688,25 +697,41 @@ pub fn execute_leg(
             else {
                 return Err(ProgramError::NotEnoughAccountKeys);
             };
-            if dwallet_program.address().as_array()
-                != &a[asset::IKA_PROGRAM..asset::IKA_PROGRAM + 32]
-            {
+            if dwallet_program.address() != &ika::IKA_PROGRAM_ID {
                 return Err(ProgramError::IncorrectProgramId);
             }
             if this_program.address() != program_id {
                 return Err(ProgramError::IncorrectProgramId);
             }
+            // Bind the voucher to the dWallet this chain registered: the CPI authority is
+            // shared by every dWallet the ledger holds.
             if dwallet.address().as_array() != &ch[chain::DWALLET..chain::DWALLET + 32] {
                 return Err(LedgerError::AccountMismatch.into());
             }
+            let pubkey_len = (ch[chain::DWALLET_PUBKEY_LEN] as usize).min(65);
+            ika::check_dwallet(
+                dwallet,
+                cpi_authority.address(),
+                read_u16(&ch, chain::CURVE),
+                &ch[chain::DWALLET_PUBKEY..chain::DWALLET_PUBKEY + pubkey_len],
+            )?;
+            // The voucher lives at this leg's PDA, at its canonical bump, so it is issued
+            // once and anyone can find it again from the intent.
+            let leg_index_byte = [leg_index as u8];
+            let (expected_voucher, canonical_bump) = Address::find_program_address(
+                &[
+                    SEED_SIGNATURE_VOUCHER,
+                    intent_acc.address().as_ref(),
+                    &leg_index_byte,
+                ],
+                program_id,
+            );
+            if signature_voucher.address() != &expected_voucher
+                || signature_voucher_bump != canonical_bump
             {
-                let dw = dwallet.try_borrow()?;
-                if dw.first() != Some(&ika::DISC_DWALLET)
-                    || dw[ika::DWALLET_STATE] != ika::DWALLET_STATE_ACTIVE
-                {
-                    return Err(LedgerError::InvalidAccount.into());
-                }
+                return Err(LedgerError::InvalidVoucher.into());
             }
+
             let ledger = asset_acc.address().as_array();
             let auth = Authorization {
                 action,
@@ -717,7 +742,7 @@ pub fn execute_leg(
                 domain_separator: &read_32(&ch, chain::DOMAIN_SEPARATOR),
             };
             let digest = message_digest(ch[chain::ENCODING], &auth);
-            let user_pubkey = read_32(&a, asset::EXECUTOR);
+            let signing_key = read_32(&a, asset::IKA_SIGNING_KEY);
             let scheme = read_u16(&ch, chain::SIGNATURE_SCHEME);
 
             let ctx = DWalletContext {
@@ -726,20 +751,28 @@ pub fn execute_leg(
                 caller_program: this_program,
                 cpi_authority_bump,
             };
-            ctx.approve_message(
+            let voucher_bump_byte = [signature_voucher_bump];
+            let voucher_seeds = [
+                Seed::from(SEED_SIGNATURE_VOUCHER),
+                Seed::from(intent_acc.address().as_ref()),
+                Seed::from(&leg_index_byte),
+                Seed::from(&voucher_bump_byte),
+            ];
+            ctx.issue_signature_voucher(
                 coordinator,
-                message_approval,
+                signature_voucher,
                 dwallet,
                 payer,
                 system_program,
                 digest,
                 [0u8; 32],
-                user_pubkey,
                 scheme,
-                message_approval_bump,
+                None,
+                Some(signing_key),
+                Some(&voucher_seeds),
             )?;
             message_digest_out = digest;
-            message_approval_out = *message_approval.address().as_array();
+            signature_voucher_out = *signature_voucher.address().as_array();
         }
         _ => return Err(LedgerError::InvalidChainKind.into()),
     }
@@ -750,8 +783,8 @@ pub fn execute_leg(
         d[lo + leg::STATUS] = new_leg_status;
         d[lo + leg::MESSAGE_DIGEST..lo + leg::MESSAGE_DIGEST + 32]
             .copy_from_slice(&message_digest_out);
-        d[lo + leg::MESSAGE_APPROVAL..lo + leg::MESSAGE_APPROVAL + 32]
-            .copy_from_slice(&message_approval_out);
+        d[lo + leg::SIGNATURE_VOUCHER..lo + leg::SIGNATURE_VOUCHER + 32]
+            .copy_from_slice(&signature_voucher_out);
         write_i64(&mut d, lo + leg::EXECUTED_AT, ts);
         if new_leg_status == leg::STATUS_CONFIRMED {
             write_i64(&mut d, lo + leg::CONFIRMED_AT, ts);

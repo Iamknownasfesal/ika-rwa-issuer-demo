@@ -3,11 +3,12 @@
 ## Before the session
 
 ```bash
-# 1. Program is deployed at DkXkmLYeR63gxhvD4FkV2oAJjkKzUUGJhDoqA6ULdauE. Redeploy only if changed:
+# 1. Program is deployed at DkXkmLYeR63gxhvD4FkV2oAJjkKzUUGJhDoqA6ULdauE. Redeploy if it changed, or after an
+#    Ika wipe moved the Ika program (update the ika-dwallet-pinocchio rev in Cargo.toml first):
 scripts/deploy-program.sh
 
 # 2. Fresh devnet state (Ika pre-alpha wipes periodically):
-pnpm setup:devnet                # DKG ×2 (zero-trust), contracts, Token-2022 mint, asset + 5 chains → deployments/devnet.json
+pnpm setup:devnet                # Ika registration, DKG ×2 (zero-trust), contracts, Token-2022 mint, asset + 5 chains → deployments/devnet.json
 
 # 3. Smoke test one foreign leg from the CLI before going on stage:
 pnpm demo:intent -- --kind mint --dst 5 --amount 1000000 && sleep 6 && pnpm executor run --intent 0 --deliver live   # real Tempo mint
@@ -17,7 +18,8 @@ NEXT_PUBLIC_LEDGER_MODE=devnet LEDGER_DELIVER=live pnpm --filter @ika-rwa/app de
 pnpm --filter @ika-rwa/app dev -- -p 3001                          # mock fallback on :3001
 ```
 
-If devnet or the Ika signer is unavailable, switch to the mock tab. It runs the same flow with simulated chain state.
+If the first leg fails, `pnpm exec tsx scripts/ika-probe.ts` tells whether the Ika network itself signs. If devnet or the Ika network is
+unavailable, switch to the mock tab. It runs the same flow with simulated chain state.
 
 ## On stage
 
@@ -27,16 +29,17 @@ If devnet or the Ika signer is unavailable, switch to the mock tab. It runs the 
 | 1 Overview | Console ledger | "One asset, five chains, one ledger on Solana. Each chain lists the Ika dWallet that is its mint authority. The issuer has no key for it." |
 | 2 Mint on Base | New intent → Mint → Base → 2,500,000 → Base treasury | "Policy runs before anyone approves: global cap, Base cap, allowlist all with numbers." |
 | 3 Approve | Approver dropdown → Bob → Approve; Carol → Approve | "2-of-3. The proposer can't approve their own intent. Timelock starts now." |
-| 4 Execute | Execute | "Three steps: the Solana program approves the exact message digest, Ika signs it with the secp256k1 dWallet, the relayer delivers it to Base. The relayer can't change a byte." |
+| 4 Execute | Execute | "Three steps: the Solana program issues a signature voucher for the exact message digest, Ika signs it with the secp256k1 dWallet, the relayer delivers it to Base. The relayer can't change a byte." (The voucher takes about 15 seconds to finalize on Solana before Ika signs.) |
 | 5 Rejected | New intent → Mint → Ethereum → 40,000,000 | "Two rules fail at once. Now 1,000,000 to a random address: allowlist. This is the compromised-signer moment there is nothing to sign." |
 | 6 Move | New intent → Move → Ethereum 5,000,000 → Sui | "Burn leg first, mint leg only after the burn is confirmed. Total supply never changes." |
-| 7 Audit | Intents | "Approvers, rule results, the Ika MessageApproval and the destination hash. For every intent, on Solana." |
+| 7 Audit | Intents | "Approvers, rule results, the Ika signature voucher with the signature in it, and the destination hash. For every intent, on Solana." |
 
 Closing line: "Zero-trust dWallet the issuer's encrypted share plus the network share and the
-network share only ever signs what this program approved."
+network share only ever signs under a voucher this program issued." Say plainly that the devnet
+pre-alpha is a mock network without MPC: the control flow is real, the key security is not.
 
 ## Explorer links to have open
 
 * Program: https://explorer.solana.com/address/DkXkmLYeR63gxhvD4FkV2oAJjkKzUUGJhDoqA6ULdauE?cluster=devnet
 * Asset PDA and the two dWallet PDAs: from `deployments/devnet.json`
-* Ika program: https://explorer.solana.com/address/87W54kGYFQ1rgWqMeu4XTPHWXWmXSQCcjm8vCTfiq1oY?cluster=devnet
+* Ika program: https://explorer.solana.com/address/8siGnE3tCZbu4LTuX8QoBPErvWeGBF4pRSJDnaGdHyQv?cluster=devnet

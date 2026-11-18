@@ -13,7 +13,7 @@ const SUI_TREASURY = new Uint8Array(32).fill(0xbb);
 const asset: Asset = {
   address: alice, createKey: new Uint8Array(32), admin: alice, executor: alice, symbol: 'TBILL', decimals: 6, threshold: 2,
   approvers: [alice, bob], chainCount: 2, globalCap: 100_000_000n * M, authorizedTotal: 65_000_000n * M, intentCount: 0n,
-  timelockSecs: 5n, bump: 0, mintAuthorityBump: 0, ikaProgram: alice,
+  timelockSecs: 5n, bump: 0, mintAuthorityBump: 0, ikaSigningKey: new Uint8Array(32),
 };
 const chain = (chainId: number, authorized: bigint, cap: bigint, allow: Uint8Array): ChainDeployment => ({
   address: alice, asset: alice, chainId, legKind: 1, encoding: 1, curve: 0, signatureScheme: 0, dwallet: alice,

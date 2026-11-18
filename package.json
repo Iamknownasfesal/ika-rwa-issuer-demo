@@ -21,10 +21,10 @@
   "devDependencies": {
     "@ika-rwa/executor": "workspace:*",
     "@ika-rwa/ledger-sdk": "workspace:*",
-    "@mysten/sui": "1.45.2",
+    "@mysten/sui": "2.39.1",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.4.0",
-    "@solana/kit": "^8.3.0",
+    "@solana/kit": "^8.4.0",
     "@types/node": "^24",
     "bs58": "^6.0.0",
     "esbuild": "0.28.2",

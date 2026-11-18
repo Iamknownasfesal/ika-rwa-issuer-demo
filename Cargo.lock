@@ -1183,6 +1183,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9e0384b61958566e926dc50660321d12159025e767c18e043daf26b70104c39"
 
 [[package]]
+name = "ika-dwallet-pinocchio"
+version = "0.1.0"
+source = "git+https://github.com/dwallet-labs/ika-pre-alpha?rev=668960209803670bdce574c7e4ca9e3359b235ad#668960209803670bdce574c7e4ca9e3359b235ad"
+dependencies = [
+ "ika-protocol-program-id",
+ "pinocchio",
+]
+
+[[package]]
+name = "ika-protocol-program-id"
+version = "0.1.0"
+source = "git+https://github.com/dwallet-labs/ika-pre-alpha?rev=668960209803670bdce574c7e4ca9e3359b235ad#668960209803670bdce574c7e4ca9e3359b235ad"
+
+[[package]]
 name = "indexmap"
 version = "2.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1205,6 +1219,7 @@ dependencies = [
 name = "issuer-ledger"
 version = "0.1.0"
 dependencies = [
+ "ika-dwallet-pinocchio",
  "litesvm",
  "pinocchio",
  "pinocchio-system",
