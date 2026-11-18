@@ -35,7 +35,10 @@ and `scripts/deploy-sui.ts` never falls back to the Sui CLI keystore, which may 
 The Vercel CLI cannot read the pnpm 12 lockfile, so build locally and upload the output:
 
 ```bash
-vercel pull --yes --environment=production   # from the repo root; .vercel/project.json has rootDirectory "app"
+vercel pull --yes --environment=production   # from the repo root
+# The pull writes the project's settings over .vercel/project.json, with "rootDirectory": null.
+# Set it back to "app", or the build runs npm in the repo root and fails on "workspace:*".
+node -e 'const f=".vercel/project.json",d=JSON.parse(fs.readFileSync(f));d.settings.rootDirectory="app";fs.writeFileSync(f,JSON.stringify(d))'
 vercel build --prod                           # runs pnpm build (sdk, executor, server bundles) and next build
 vercel deploy --prebuilt --prod
 ```
