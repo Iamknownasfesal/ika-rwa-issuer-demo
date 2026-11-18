@@ -23,18 +23,19 @@
 import {
   LegKind, LegStatus, VoucherStatus, authorizationMessage, chainById, decodeSignatureVoucher, fetchAsset, fetchChains, fetchIntents,
   findChainPda, findCpiAuthorityPda, findCoordinatorPda, findIntentPda, findMintAuthorityPda, findSignatureVoucherPda, formatAmount,
-  keccak256, legNonce, toHex, IkaCurve,
+  keccak256, legNonce, toHex,
   buildConfirmLegIx, buildExecuteLegForeignIx, buildExecuteLegSolanaIx, bytesEqual,
   type Address, type Authorization, type ChainDeployment, type Intent, type SignatureVoucher,
 } from '@ika-rwa/ledger-sdk';
-import { compactSignature, connectIka, issuerKeys, sdkScheme } from '@ika-rwa/ledger-sdk/ika';
+import { compactSignature, connectIka, sdkScheme } from '@ika-rwa/ledger-sdk/ika';
+import { dwalletNameOf, issuerKeysOf } from './ika.js';
 import { explainError, extractLedgerErrorCode } from '@ika-rwa/ledger-sdk';
 import { getAddressDecoder, getAddressEncoder, getBase64Encoder } from '@solana/kit';
 import { deliverEvm, evmBalanceOf, loadEvmDeployments } from './deliver/evm.js';
 import { deliverSui, loadSuiDeployment, loadSuiKeypair, suiBalanceOf } from './deliver/sui.js';
 import { mockDeliver, type Delivery } from './deliver/mock.js';
 import { createClient, explorerAddress, explorerTx, sendInstructions, type SolanaRpc } from './solana.js';
-import type { DWalletName, ExecutorConfig } from './config.js';
+import type { ExecutorConfig } from './config.js';
 
 export * from './config.js';
 export * from './solana.js';
@@ -222,9 +223,9 @@ export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex
   }
 
   // ── 2. Ika signature voucher + signature ──
-  const dwalletName: DWalletName = chain.curve === IkaCurve.Secp256k1 ? 'secp256k1' : 'curve25519';
-  // About five seconds of WebAssembly the first time in a process, then served from memory.
-  const keys = await issuerKeys(cfg.issuer.rootSeed, chain.curve);
+  const dwalletName = dwalletNameOf(chain.curve);
+  // Restored from the issuer's secrets: no key generation at execution time.
+  const keys = await issuerKeysOf(cfg.issuer, chain.curve);
   const { ikaClient, close } = connectIka(rpc, cfg.ika);
   let signature: Uint8Array;
   try {

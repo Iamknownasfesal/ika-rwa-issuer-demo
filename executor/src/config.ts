@@ -42,13 +42,19 @@ export type DeliverMode = 'mock' | 'live' | 'evm';
 export type DWalletName = 'secp256k1' | 'curve25519';
 
 /**
- * What the issuer keeps to use its dWallets: the root seed of its Ika keys, and each dWallet as
- * the key generation returned it, user share included. It is a secret, like the issuer's HSM
+ * What the issuer keeps to use its dWallets: the root seed of its Ika keys, the keys derived from
+ * it, and each dWallet as the key generation returned it, user share included. It is a secret, like the issuer's HSM
  * material in production. `keys/ika-issuer.json`, or the `LEDGER_IKA_ISSUER` env var.
  */
 export interface IkaIssuerSecrets {
   rootSeed: Uint8Array;
   dwallets: Partial<Record<DWalletName, DWallet>>;
+  /**
+   * The issuer's keys for each curve, as the SDK serializes them. Deriving them from the root
+   * seed is real class-groups key generation, about five seconds, which mock mode does not skip.
+   * Setup derives them once; everything after restores them from here and computes nothing.
+   */
+  keys?: Partial<Record<DWalletName, Uint8Array>>;
 }
 
 export interface ExecutorConfig {
@@ -109,7 +115,7 @@ export function loadIkaIssuer(): IkaIssuerSecrets | null {
   if (text === null) return null;
   const secrets = decodeSecrets<IkaIssuerSecrets>(text);
   if (!(secrets.rootSeed instanceof Uint8Array) || secrets.rootSeed.length !== 32) throw new Error('the Ika issuer secrets hold no 32-byte root seed');
-  return { rootSeed: secrets.rootSeed, dwallets: secrets.dwallets ?? {} };
+  return { rootSeed: secrets.rootSeed, dwallets: secrets.dwallets ?? {}, ...(secrets.keys ? { keys: secrets.keys } : {}) };
 }
 
 export function saveIkaIssuer(secrets: IkaIssuerSecrets): void {

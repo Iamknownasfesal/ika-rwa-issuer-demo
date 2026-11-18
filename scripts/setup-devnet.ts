@@ -270,7 +270,9 @@ async function main(): Promise<void> {
   let ikaSigningKey: Uint8Array;
   const { ikaClient, close } = connectIka(client.rpc, IKA_NET);
   try {
-    const issuer = await loadIssuer(ikaClient, secrets.rootSeed);
+    const issuer = await loadIssuer(ikaClient, secrets);
+    // Keep the derived keys, so nothing after setup generates them again.
+    saveIkaIssuer(secrets);
     ikaSigningKey = issuer.requestKey;
     val('issuer request key', toHex(ikaSigningKey));
     const created = await registerIssuer(client, ikaClient, executor, issuer);

@@ -31,7 +31,7 @@ const rootSeed = Uint8Array.from(JSON.parse(readFileSync(seedPath, 'utf8')) as n
 
 const { ikaClient, close } = connectIka(client.rpc, { ...IKA_DEVNET_PRE_ALPHA, programId: IKA_DEVNET_PRE_ALPHA.programId as Address });
 try {
-  const issuer = await loadIssuer(ikaClient, rootSeed);
+  const issuer = await loadIssuer(ikaClient, { rootSeed, dwallets: {} });
   const keys = issuer.keys[curve];
   step(`wallet ${wallet.address}, request key ${toHex(issuer.requestKey)}`);
   const created = await registerIssuer(client, ikaClient, wallet, issuer);

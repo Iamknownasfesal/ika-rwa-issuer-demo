@@ -46,8 +46,7 @@ vercel deploy --prebuilt --prod
 `pnpm build` also writes `sdk/dist/server.mjs` and `executor/dist/server.mjs`, single-file
 bundles the console loads natively. `app/next.config.ts` traces from the repo root and ships
 those bundles, the Ika SDK's WebAssembly module and `deployments/*.json` with every API function.
-`execute` may run for up to 300 seconds; a foreign leg takes about 13 on a cold
-function (5 of them deriving the issuer's Ika keys) and about 7 once the keys are in memory.
+`execute` may run for up to 300 seconds; a foreign leg takes about 8.
 
 After `pnpm setup:devnet` writes a new asset, redeploy so the functions pick up the new
 `deployments/devnet.json`. When it also made new dWallets (after an Ika wipe), update

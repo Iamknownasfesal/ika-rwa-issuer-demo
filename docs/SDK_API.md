@@ -110,9 +110,9 @@ Network values for the devnet pre-alpha are `IKA_DEVNET_PRE_ALPHA` in `sdk/src/c
 export type StepEvent = { leg: number; step: 'policy'|'ika-approval'|'ika-signature'|'deliver'|'confirm'; status: 'start'|'ok'|'error'; detail?: string; txHash?: string; signature?: string; signatureVoucher?: string }
 export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex: number): AsyncGenerator<StepEvent>
 export interface ExecutorConfig { rpcUrl; wsUrl; programId; asset; ika: IkaNetworkConfig; executorKeypair: KeyPairSigner; issuer: IkaIssuerSecrets; deliver: 'mock'|'live' }
-export interface IkaIssuerSecrets { rootSeed: Uint8Array; dwallets: { secp256k1?: DWallet; curve25519?: DWallet } }
+export interface IkaIssuerSecrets { rootSeed: Uint8Array; dwallets: { secp256k1?: DWallet; curve25519?: DWallet }; keys?: { secp256k1?: Uint8Array; curve25519?: Uint8Array } /* serialized, so execution derives nothing */ }
 configFromDeployment(deployment, executorKeypair, deliver)   // reads the issuer secrets from LEDGER_IKA_ISSUER or keys/ika-issuer.json
-loadIssuer(ikaClient, rootSeed), registerIssuer(client, ikaClient, wallet, issuer), sendIka(client, ikaClient, owner, keys, build)
+loadIssuer(ikaClient, secrets), issuerKeysOf(secrets, curve), registerIssuer(client, ikaClient, wallet, issuer), sendIka(client, ikaClient, owner, keys, build)
 ```
 `runLeg` resumes a leg the ledger already authorized: the voucher is found again from the intent, and a voucher that is already signed
 gives its signature from Solana without a new request. Mock delivery: a deterministic fake tx hash formatted for the chain. Live delivery:

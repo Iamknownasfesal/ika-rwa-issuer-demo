@@ -4,14 +4,15 @@
  */
 import { IkaCurve } from '@ika-rwa/ledger-sdk';
 import {
-  IkaTransaction, connectIka, issuerKeys, sdkCurve,
-  type IkaClient, type IkaConnection, type IkaNetworkConfig, type UserShareEncryptionKeys,
+  IkaTransaction, UserShareEncryptionKeys, connectIka, issuerKeys, sdkCurve,
+  type IkaClient, type IkaConnection,
 } from '@ika-rwa/ledger-sdk/ika';
+import type { DWalletName, IkaIssuerSecrets } from './config.js';
 import type { KeyPairSigner } from '@solana/kit';
 import { sendInstructions, waitForFinalized, type SentTx, type SolanaClient } from './solana.js';
 
-export type { IkaClient, IkaConnection, UserShareEncryptionKeys };
-export { connectIka, issuerKeys };
+export type { IkaClient, IkaConnection };
+export { UserShareEncryptionKeys, connectIka, issuerKeys };
 
 /** The curves the demo's dWallets use: secp256k1 for the EVM chains, Curve25519 for Sui. */
 export const ISSUER_CURVES = [IkaCurve.Secp256k1, IkaCurve.Curve25519] as const;
@@ -41,10 +42,29 @@ export interface Issuer {
   requestKey: Uint8Array;
 }
 
-/** The issuer's keys for every curve the demo uses, from its root seed. */
-export async function loadIssuer(ikaClient: IkaClient, rootSeed: Uint8Array): Promise<Issuer> {
+/** The name a curve's dWallet and keys go by in the issuer's secrets. */
+export function dwalletNameOf(curve: number): DWalletName {
+  return curve === IkaCurve.Secp256k1 ? 'secp256k1' : 'curve25519';
+}
+
+/**
+ * The issuer's keys for one curve: restored from the secrets when they hold them, which computes
+ * nothing, and otherwise derived from the root seed (about five seconds) and added to `secrets`,
+ * for the caller to save.
+ */
+export async function issuerKeysOf(secrets: IkaIssuerSecrets, curve: number): Promise<UserShareEncryptionKeys> {
+  const name = dwalletNameOf(curve);
+  const stored = secrets.keys?.[name];
+  if (stored) return UserShareEncryptionKeys.fromShareEncryptionKeysBytes(stored);
+  const keys = await issuerKeys(secrets.rootSeed, curve);
+  secrets.keys = { ...secrets.keys, [name]: keys.toShareEncryptionKeysBytes() };
+  return keys;
+}
+
+/** The issuer's keys for every curve the demo uses. Keys it had to derive are added to `secrets`. */
+export async function loadIssuer(ikaClient: IkaClient, secrets: IkaIssuerSecrets): Promise<Issuer> {
   const keys: Record<number, UserShareEncryptionKeys> = {};
-  for (const curve of ISSUER_CURVES) keys[curve] = await issuerKeys(rootSeed, curve);
+  for (const curve of ISSUER_CURVES) keys[curve] = await issuerKeysOf(secrets, curve);
   const requestKey = ikaClient.getRequestPublicKey(keys[ISSUER_CURVES[0]]);
   for (const curve of ISSUER_CURVES) {
     const other = ikaClient.getRequestPublicKey(keys[curve]);
