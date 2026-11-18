@@ -47,8 +47,13 @@ Each check has its own error (`InvalidDWallet`, `DWalletNotOwned`, `DWalletMisma
 
 ## Facts that matter in practice
 
-- **Finalized.** The network reads Solana at finalized commitment. A sign request sent while the
-  voucher is only confirmed is refused, so the executor waits about 15 seconds after `execute_leg`.
+- **Finalized.** The network reads Solana at finalized commitment, so the executor reads the
+  voucher at finalized before it asks for the signature. Since Alpenglow, finalized trails
+  confirmed by under a second, so this costs nothing noticeable.
+- **Key derivation is the slow step.** `UserShareEncryptionKeys.fromRootSeedKey` takes about five
+  seconds in WebAssembly, even in mock mode, and blocks the thread while it runs. The result is
+  kept for the process: measured on devnet, a first foreign leg takes about 13 seconds and a
+  following one about 7.
 - **Mock mode and gRPC-Web.** The client is built with `withMockCryptography` and a
   `DWalletGrpcClient` from `@ika.xyz/pre-alpha-core/web`. Plain gRPC on port 443 gets HTTP 400.
 - **Signatures.** ECDSA comes back as 65 bytes: the recovery byte, then `r` and `s`. The EVM

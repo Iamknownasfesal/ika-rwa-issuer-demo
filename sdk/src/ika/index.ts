@@ -67,10 +67,22 @@ export function sdkScheme(scheme: number): { signatureAlgorithm: SignatureAlgori
   throw new Error(`unsupported signature scheme ${scheme}`);
 }
 
-/** The issuer's keys for one curve. The request key is the same for every curve of one root seed. */
+const derivedKeys = new Map<string, Promise<UserShareEncryptionKeys>>();
+
+/**
+ * The issuer's keys for one curve. The request key is the same for every curve of one root seed.
+ * Deriving them takes about five seconds, so each seed and curve is derived once per process.
+ */
 export function issuerKeys(rootSeed: Uint8Array, curve: number): Promise<UserShareEncryptionKeys> {
   if (rootSeed.length !== 32) throw new Error('the Ika root seed must be 32 bytes');
-  return UserShareEncryptionKeys.fromRootSeedKey(rootSeed, sdkCurve(curve));
+  const id = `${curve}:${Array.from(rootSeed, (b) => b.toString(16).padStart(2, '0')).join('')}`;
+  let keys = derivedKeys.get(id);
+  if (!keys) {
+    keys = UserShareEncryptionKeys.fromRootSeedKey(rootSeed, sdkCurve(curve));
+    keys.catch(() => derivedKeys.delete(id));
+    derivedKeys.set(id, keys);
+  }
+  return keys;
 }
 
 /**

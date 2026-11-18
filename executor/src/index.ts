@@ -6,7 +6,7 @@
  *   1. `execute_leg` on Solana: the ledger re-checks caps, then either mints /
  *      burns Token-2022 (Solana leg) or CPIs Ika `issue_signature_voucher`
  *      (foreign leg). The voucher sits at the ledger's PDA for the leg.
- *   2. For foreign legs: wait until the voucher is finalized, then ask the Ika
+ *   2. For foreign legs: once the voucher is finalized, ask the Ika
  *      network to sign the authorization message under it. The network reads
  *      the voucher on Solana itself and writes the signature into it.
  *   3. Deliver the signed authorization to the destination chain.
@@ -223,6 +223,7 @@ export async function* runLeg(cfg: ExecutorConfig, intentIndex: bigint, legIndex
 
   // ── 2. Ika signature voucher + signature ──
   const dwalletName: DWalletName = chain.curve === IkaCurve.Secp256k1 ? 'secp256k1' : 'curve25519';
+  // About five seconds of WebAssembly the first time in a process, then served from memory.
   const keys = await issuerKeys(cfg.issuer.rootSeed, chain.curve);
   const { ikaClient, close } = connectIka(rpc, cfg.ika);
   let signature: Uint8Array;
